@@ -1,0 +1,36 @@
+<Project>
+  <!--
+    Shared settings for the compile-check projects. These projects only type-check the Unity
+    sources outside the editor; the Unity editor remains the real compiler.
+    Each project gets its own obj/ and bin/ folder because all three live in this directory.
+  -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: missing XML comment (tests are not documented). -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <DebugType>none</DebugType>
+    <!-- Unity package DLLs pull in a few older facades; we only want a type check. -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277;MSB3243</MSBuildWarningsAsMessages>
+
+    <ProjectRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\'))</ProjectRoot>
+    <UnityEditorDir Condition="'$(UnityEditorDir)' == ''">C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor</UnityEditorDir>
+    <UnityManagedDir>$(UnityEditorDir)\Data\Managed\UnityEngine</UnityManagedDir>
+    <ScriptAssembliesDir>$(ProjectRoot)Library\ScriptAssemblies</ScriptAssembliesDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Engine modules (UnityEngine.dll + UnityEngine.*Module.dll), as every Unity assembly gets. -->
+    <Reference Include="$(UnityManagedDir)\UnityEngine.dll;$(UnityManagedDir)\UnityEngine.*.dll">
+      <HintPath>%(FullPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

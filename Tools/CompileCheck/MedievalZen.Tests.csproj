@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Type-checks Assets/_Project/Tests/EditMode (asmdef "MedievalZen.Tests"). Settings: Directory.Build.props. -->
+  <PropertyGroup>
+    <AssemblyName>MedievalZen.Tests</AssemblyName>
+    <RootNamespace>MedievalZen.Tests</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(ProjectRoot)Assets\_Project\Tests\EditMode\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="MedievalZen.Runtime.csproj" />
+    <!-- Unity's custom NUnit build (com.unity.ext.nunit); the folder name carries a hash, hence the glob. -->
+    <Reference Include="$(ProjectRoot)Library\PackageCache\com.unity.ext.nunit@*\net40\unity-custom\nunit.framework.dll">
+      <HintPath>%(FullPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

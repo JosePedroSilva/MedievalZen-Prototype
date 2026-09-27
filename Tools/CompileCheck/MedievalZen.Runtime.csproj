@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Type-checks Assets/_Project runtime code (asmdef "MedievalZen"). Settings: Directory.Build.props. -->
+  <PropertyGroup>
+    <AssemblyName>MedievalZen</AssemblyName>
+    <RootNamespace>MedievalZen</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(ProjectRoot)Assets\_Project\**\*.cs"
+             Exclude="$(ProjectRoot)Assets\_Project\Editor\**;$(ProjectRoot)Assets\_Project\Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Package assemblies compiled by the editor, minus editor-only, test and code-gen assemblies. -->
+    <Reference Include="$(ScriptAssembliesDir)\*.dll"
+               Exclude="$(ScriptAssembliesDir)\*Editor*.dll;$(ScriptAssembliesDir)\*Test*.dll;$(ScriptAssembliesDir)\*CodeGen*.dll;$(ScriptAssembliesDir)\*DocCode*.dll;$(ScriptAssembliesDir)\Assembly-CSharp*.dll;$(ScriptAssembliesDir)\MedievalZen*.dll">
+      <HintPath>%(FullPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

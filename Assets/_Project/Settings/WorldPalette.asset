@@ -1,0 +1,739 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08daafff6ed176b4893dcbd070cab75e, type: 3}
+  m_Name: WorldPalette
+  m_EditorClassIdentifier: MedievalZen::MedievalZen.World.WorldPalette
+  detailVersion: 2
+  families:
+  - id: ForestTree
+    prefabs:
+    - {fileID: 1016392496237815170, guid: f8b47c2401a09be4f87efe27b925b3fd, type: 3}
+    - {fileID: 5592075822852266847, guid: 44bbd64fad9366947a1c9b68c15e1261, type: 3}
+    - {fileID: 3298165907711742831, guid: 050fd5c9e63617c4db35ee70e9e823f1, type: 3}
+    - {fileID: 6954770494557141849, guid: 0f2120e89197acc47bfde23175d19f26, type: 3}
+    - {fileID: 2146921750331591826, guid: a6dccea81e1455d4491d73f1d0e6d0ce, type: 3}
+    - {fileID: 472023531885247532, guid: 23d1a7dd3d1c2dd4888ad8183a624ebb, type: 3}
+    - {fileID: 1880130991530675682, guid: 6b5cd3b0c50436a4db8637775a75d6ad, type: 3}
+    - {fileID: 2137760205200772258, guid: 49091280d622b904f96e72e71fe4e877, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: PineTree
+    prefabs:
+    - {fileID: 6131553767378768855, guid: ae12f1ba847c6f74281e7a9a7b0ac7fd, type: 3}
+    - {fileID: 1487672732027152291, guid: 6a549a408565cdf44b5961dccadce139, type: 3}
+    - {fileID: 4492788140253398761, guid: 814fca2ada463e34d8f0430280c2f116, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: DeadTree
+    prefabs:
+    - {fileID: 5965284952787518018, guid: 57568ffb4135a5d4bbe66802d0c9519b, type: 3}
+    - {fileID: 5162523033389567373, guid: f7efb658b10cbe14c9fbd0e5ae4b8a1a, type: 3}
+    - {fileID: 6443395740361465152, guid: 7b82e04a27c74dc41b25b85279da1a13, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: MeadowTree
+    prefabs:
+    - {fileID: 6954770494557141849, guid: 0f2120e89197acc47bfde23175d19f26, type: 3}
+    - {fileID: 2146921750331591826, guid: a6dccea81e1455d4491d73f1d0e6d0ce, type: 3}
+    - {fileID: 5592075822852266847, guid: 44bbd64fad9366947a1c9b68c15e1261, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: FruitTree
+    prefabs:
+    - {fileID: 2452613710419899469, guid: f5ba9e2973c6d8d4cad295b79e2a7f45, type: 3}
+    - {fileID: 2154830210199987570, guid: 681cbb809427f574a9f0d40322b45c90, type: 3}
+    - {fileID: 739240639354438539, guid: ab41e12e3193e5241a054da74ad6cee7, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Bush
+    prefabs:
+    - {fileID: 5580235122429883281, guid: e527460148bf17741a2c17dffc4fb54a, type: 3}
+    - {fileID: 6906830690193866741, guid: 3595ba075729fec458abd9577f51845e, type: 3}
+    - {fileID: 1583897355313174661, guid: 09593cef97621c0418f070d7c9fa3091, type: 3}
+    - {fileID: 1159558787302553158, guid: 93d6b405c00afaa46b2e4f45cb9f2a2e, type: 3}
+    - {fileID: 2308869840000360606, guid: 37c84c10bc09ad14eb8854f863ea5b82, type: 3}
+    - {fileID: 6938313185453466299, guid: 3d7b3b0cc989a8b42b09ddb0ad31ef4d, type: 3}
+    - {fileID: 1792900863588751309, guid: a7366d14de7f1d2428a73c854ca3e093, type: 3}
+    - {fileID: 8498775590324875546, guid: 046fcab6e891a844abfc53b520c8f394, type: 3}
+    - {fileID: 8461432304894645062, guid: 3cddcf39bbe57674fbe747564a932cc8, type: 3}
+    - {fileID: 6810348402670925573, guid: d96062693eb9daa46af30926687c83d5, type: 3}
+    - {fileID: 8198007480350305466, guid: 91ef7d7e0e16b3d439e4c76b268739aa, type: 3}
+    - {fileID: 8332555351576632476, guid: 07da5fd21f5083a4c8c43dbed5751810, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Shrub
+    prefabs:
+    - {fileID: 1619753892308080442, guid: d3b2ebfd4513b154daf464919b8c497e, type: 3}
+    - {fileID: 3906769237286605374, guid: 9b3829509b5d28940973bfb14488a673, type: 3}
+    - {fileID: 2144897834126725923, guid: 5c0aef061772c534ab1ab3ea9ac1cc3d, type: 3}
+    - {fileID: 7424801524984937579, guid: a25dfe0a7afa444499605d59689b3287, type: 3}
+    - {fileID: 1290837552235159865, guid: 3354b9dcbee056449bf9844dc3ba2bc1, type: 3}
+    - {fileID: 3016793139068439016, guid: ca285bbe344593746ad838255e5fa0bf, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Stump
+    prefabs:
+    - {fileID: 7170295694990207602, guid: 4425216ae0e345c43adc010abcdd90f1, type: 3}
+    - {fileID: 7196810933511123041, guid: 29cecbe5f22b8f248abca9b49e8fe3ef, type: 3}
+    - {fileID: 5329577460968038239, guid: 38d257c588f863747bd31ff57651e099, type: 3}
+    - {fileID: 1480531524279832838, guid: 3e650bba3bae09541be841308573126d, type: 3}
+    - {fileID: 4123662889923936240, guid: 7f44ecdd42b82f645895aa5063db454c, type: 3}
+    - {fileID: 2400259571468678574, guid: 105ee0fcfe6e65241868107adc888524, type: 3}
+    - {fileID: 7054676556780264874, guid: b0fbe07c113844c4cadadde1cc036cec, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Twig
+    prefabs:
+    - {fileID: 305176673228003762, guid: 76367a35439ddea4ab1bdce14f7df589, type: 3}
+    - {fileID: 2403493241316482311, guid: ddddc64f0c6bcde43abfa8e6a264eac1, type: 3}
+    - {fileID: 3653305716081345845, guid: 8540091d29a8fea4c844833489cdde1d, type: 3}
+    - {fileID: 7956564297462634136, guid: b7550af82cd646d4bb442582afac3ffd, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Rock
+    prefabs:
+    - {fileID: 756244418324746648, guid: 9cc02011d1e1d024e9c4420809cd2623, type: 3}
+    - {fileID: 4135293660491200023, guid: 145248c1f7a30134aaf7b4e97e61e587, type: 3}
+    - {fileID: 6671201710616577448, guid: 7ccda6cccc3b37b478c8150b94d87825, type: 3}
+    - {fileID: 9110741528043765063, guid: 9922f644f9531f94fa83781758176b12, type: 3}
+    - {fileID: 5207343347866302275, guid: 25a366f9530f17847aab7e10d3457add, type: 3}
+    - {fileID: 4830829909047587312, guid: f2eb098c9af8a024c97f19e5a328eb07, type: 3}
+    - {fileID: 4259286663014254190, guid: 85d4b66433595d840b0ef5a47fa79d10, type: 3}
+    - {fileID: 2404807638410859368, guid: 5fc130c65f02ac04bbfb350fbe21d3cc, type: 3}
+    - {fileID: 4322767382158653204, guid: b6ddfbfd1ea362c4bb32e531cb6213cb, type: 3}
+    - {fileID: 7251943758774493481, guid: 5de91b71dc1698644b51f75f1521f6ea, type: 3}
+    - {fileID: 7211606713778384998, guid: cc46b771562eb3e4793292607fc3f72b, type: 3}
+    - {fileID: 8202731649550764293, guid: d67c6edfceeb6fc468ead41526729645, type: 3}
+    - {fileID: 6551663106355943591, guid: 4938a8fb6b665c24d8d6f44a454494b1, type: 3}
+    - {fileID: 274166536403621637, guid: a2e8aab815313704cb0cc67a12f9bd9c, type: 3}
+    - {fileID: 6509933743064751742, guid: 46e026a974292cb479015cc7012d91ab, type: 3}
+    - {fileID: 1168210563750090145, guid: daad3195a405192409324b56eec44e2b, type: 3}
+    - {fileID: 7001493443700725908, guid: dba3a83229940fb4aa5dc5b215b125bd, type: 3}
+    - {fileID: 934139093418113451, guid: 084badf5d29d3dc49961929d9db7f722, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: RockSmallPile
+    prefabs:
+    - {fileID: 5376390175986146221, guid: a6953db8e1209e74b8141f1e9847b94b, type: 3}
+    - {fileID: 1118155114131449006, guid: e1b4f5f50eebd6441919aab5ea3b042f, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: RockPile
+    prefabs:
+    - {fileID: 6349486475167353718, guid: 15ddc642aad5d7e4489243dd22c050a2, type: 3}
+    - {fileID: 733411129065957145, guid: 6d5dadd908e2bff42b4a13969b907286, type: 3}
+    - {fileID: 4374485394195453821, guid: 70cf0fb2a13a39544b0d278b44373fd6, type: 3}
+    - {fileID: 3602968231980259084, guid: c279447596db3a241a432dad1ce3f806, type: 3}
+    - {fileID: 2890188824703842365, guid: 231991aabb568a143b480c4e6638d511, type: 3}
+    - {fileID: 2256525659426997430, guid: 50a156ed21fe5f448b4b4da0b5345643, type: 3}
+    - {fileID: 3751143142679933437, guid: 921ba8c526411074b9694e3fccb927f1, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: RockGround
+    prefabs:
+    - {fileID: 8395432521584132826, guid: 3e6f5e14a8d55bb46afc712ac4e20393, type: 3}
+    - {fileID: 1059856070126637451, guid: c4a9f4572dea4a047a6956108eb154af, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Cliff
+    prefabs:
+    - {fileID: 6411061972673112039, guid: 3928fe46c1997be45a7e169b0eb63625, type: 3}
+    - {fileID: 6097588891569378077, guid: 3ca01142054c997498fd413b391cbfcc, type: 3}
+    - {fileID: 9188181392545036199, guid: 1adbdd5ea9a76d247a3f262569b3e059, type: 3}
+    - {fileID: 4905485108370227772, guid: ae1b00ab0436c534c8afc42e19ab6e96, type: 3}
+    - {fileID: 6415082291862398264, guid: cc6ce2b1c2cc42a4680c685604f3d642, type: 3}
+    - {fileID: 8143087844690495153, guid: ed0d53bff53cd7a4182b1cd7eb6b7802, type: 3}
+    - {fileID: 8794171678619182943, guid: e39229f251ffbf3478cb0891e878d698, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: DirtCliff
+    prefabs:
+    - {fileID: 5883088392208447636, guid: efba04a08e834ed4da6ebc058790c7da, type: 3}
+    - {fileID: 6038491958005468761, guid: f66e9025bf3f814478d0a0927c302226, type: 3}
+    - {fileID: 5263757998832949447, guid: f87592a3c1d6fdf449ed03ce024a2c93, type: 3}
+    - {fileID: 658745427183062084, guid: dfd8e676d66299c4c8eaed3b02d20a15, type: 3}
+    - {fileID: 7042933923181016387, guid: 8c7a891bed7ba7042b72398af03607d0, type: 3}
+    - {fileID: 7009548978709351938, guid: 4a02d6417a35ba64d9b4c0aba0b593d2, type: 3}
+    - {fileID: 3900956376870440453, guid: ef3c8ec49aa5bab449f59408bef77891, type: 3}
+    - {fileID: 3265862617242815588, guid: 8961f72670410b349bc2b8be42cdd12e, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: GroundCliff
+    prefabs:
+    - {fileID: 5992770638545459823, guid: 5df3ab22a0616e0499aed68e1126c3ad, type: 3}
+    - {fileID: 471923123672322053, guid: 5d1b34597db8ee544b1a08a76940206c, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Mound
+    prefabs:
+    - {fileID: 2706482512534447143, guid: 70d480ee3ff06b841b6e998587e025ac, type: 3}
+    - {fileID: 3481701525266939563, guid: 2168d4bfb5dc34540b509fec3db20131, type: 3}
+    - {fileID: 7997358673223639761, guid: 44d96a0b4a88a084e864b6ada4ee6d1e, type: 3}
+    - {fileID: 8104795074438688726, guid: 44fa32dfed8698c49a065505fdc13a39, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Mushroom
+    prefabs:
+    - {fileID: 657731378887634579, guid: 2a619fc8aae95784498b9017336465d6, type: 3}
+    - {fileID: 4476546647263128547, guid: e52b14c35175e374f8604407a38ba3bb, type: 3}
+    - {fileID: 1064464138682783183, guid: 553f1bc39902e7249a45d1733467e11e, type: 3}
+    - {fileID: 695319612025307586, guid: 67aae07f4fff17d429874797a101c47c, type: 3}
+    - {fileID: 6444169022458573102, guid: f40f753b9a48b184c9ced5dcb8f6e5b5, type: 3}
+    - {fileID: 7170117340267794464, guid: f94a2fded59a78e4b9c7f7ace17c9652, type: 3}
+    - {fileID: 1511162409591480987, guid: 207b689f475fbcc48bf39ca3fecca461, type: 3}
+    - {fileID: 6085449861703954026, guid: 79c52f8723aa35a41ba11b05addad7e9, type: 3}
+    - {fileID: 7158316201231779819, guid: 5a94592405aec68418c8c69881c5a3b0, type: 3}
+    - {fileID: 6357802072710160018, guid: 8353db0dbf1e99b4b810c7fbb79944fa, type: 3}
+    - {fileID: 4588459746972545552, guid: 8935206927463ed4b92ab77408e959e6, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: MushroomGroup
+    prefabs:
+    - {fileID: 2182585611302554245, guid: a5277b97dce33a649b85ce6b40977fea, type: 3}
+    - {fileID: 6771964388609471201, guid: fedd3a956bed7954581243895aff638b, type: 3}
+    - {fileID: 5302535744711460047, guid: 7cbe4d5561fe6664abc10275ce1bbf2c, type: 3}
+    - {fileID: 5762225385351476241, guid: 0e9a961200ad2294caba1a1958a4625d, type: 3}
+    - {fileID: 1060840157749525307, guid: 443b419ea1ffdb042be6ed8eac6f153c, type: 3}
+    - {fileID: 7526140038480319387, guid: 1bb7c04abb892e54e86a1e9b09a244a9, type: 3}
+    - {fileID: 7443722364286002489, guid: 3c6bb21a626820d41b35588998620340, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Leaves
+    prefabs:
+    - {fileID: 5144445196317474735, guid: e476e784f4bee81438d09c0dfa7640cb, type: 3}
+    - {fileID: 1062100953097099547, guid: 9d58650ef56857b48b2e9bd65ec50801, type: 3}
+    - {fileID: 8596010870747751422, guid: f3f0fef6f816f4641856a0db4dfbb905, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Lilies
+    prefabs:
+    - {fileID: 6062439210530755565, guid: 3e44b897679ea1e458c6a0a8c84ef8ac, type: 3}
+    - {fileID: 6774416895602562607, guid: f471d190ac5cada4fb894f44172172c5, type: 3}
+    - {fileID: 5117586238626964061, guid: 62c6a9838d4b5fb4497d6aa2003415f4, type: 3}
+    - {fileID: 8504870018549469485, guid: 72718a7dd962bbd419b2cb9d4dddf7ce, type: 3}
+    - {fileID: 7873376550818156431, guid: 24ee3abdca353634c8e5a41a5cd5a59c, type: 3}
+    - {fileID: 20998114159443149, guid: 09f8c7509544297418cd89f18a635bac, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: StoneStack
+    prefabs:
+    - {fileID: 6145668825988325228, guid: 872d5d8c6cd685d46b16496c4ca5c3d5, type: 3}
+    - {fileID: 5363172556102589071, guid: 5caaabc25a77e7b4f8a54f052b533ee0, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: StonePile
+    prefabs:
+    - {fileID: 3621875773770697450, guid: 8ccba9dd8ca4fa049936ac69cb28f89f, type: 3}
+    - {fileID: 5862086252623371763, guid: cea180d7bdaf3ac48a20137accbbb4af, type: 3}
+    - {fileID: 389397990951966856, guid: 6f1a98e3584f4274eae202a16413a7d5, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: StoneRunes
+    prefabs:
+    - {fileID: 8399999279053616784, guid: eec2c7a8577d7d14eb91afd67a50057f, type: 3}
+    - {fileID: 8081451502350781107, guid: f954b649a840e474baaec1829bf5727d, type: 3}
+    - {fileID: 975135955877236048, guid: 5016983543aba8f42ae1f67b10361091, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: CropField
+    prefabs:
+    - {fileID: 3042332564047214823, guid: 2acc6353c8080714190f0cdc412ecd6b, type: 3}
+    - {fileID: 4327079560877414144, guid: 6e9780d53ac5cdd43af20cf0c71faeec, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Rapeseed
+    prefabs:
+    - {fileID: 38498129842428085, guid: f7142a1ed6d0b4b4fb7cbe37d9e37a67, type: 3}
+    - {fileID: 2835129454270653783, guid: 22845031b417d354b82747783abafec0, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Sunflower
+    prefabs:
+    - {fileID: 30244553050222735, guid: 73663df767caaeb4e8d8a22389f6b41f, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Scarecrow
+    prefabs:
+    - {fileID: 4630057790355050636, guid: 1a15fe55c3ddc5940871aef6c676e89d, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Fence
+    prefabs:
+    - {fileID: 9114655718920951484, guid: 503b60469f63ae643aaa426845540f8a, type: 3}
+    - {fileID: 5783737708425706541, guid: a49e6ba0078f73346ab7905314b35521, type: 3}
+    - {fileID: 6248874593050605995, guid: 2136df90ad1a7e2459bae28e887dfd63, type: 3}
+    - {fileID: 8156132886700001649, guid: 4e8e009d1a671cf4280c766381821e01, type: 3}
+    - {fileID: 8936681390852513316, guid: 98d9efe2890b741499cc21e5f035d928, type: 3}
+    yawOffset: -90
+    centerPivot: 1
+    nativeHeights: []
+    nativeWidths: []
+  - id: FencePost
+    prefabs:
+    - {fileID: 7484984876494443788, guid: 277f50ffef35dd142a7ba2c4947f9ad9, type: 3}
+    - {fileID: 2325012308711101274, guid: dc9af8aa6a3e980499d35c36001064e3, type: 3}
+    - {fileID: 6049859563384066703, guid: 9122fc08706cbee4991a536945a1d356, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: FenceGate
+    prefabs:
+    - {fileID: 6265951969987849347, guid: 6843e19d0dc4942458d8d2881126d5e7, type: 3}
+    - {fileID: 3288417255581504935, guid: cb9abd514f5e89748a340bcab402b3c8, type: 3}
+    yawOffset: -90
+    centerPivot: 1
+    nativeHeights: []
+    nativeWidths: []
+  - id: Cabin
+    prefabs:
+    - {fileID: 2763672626335216884, guid: faa232351140d09468c55b9d5a0ec242, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Windmill
+    prefabs:
+    - {fileID: 8350444319614016920, guid: f0290686e4170fc4b8421f6a07049fad, type: 3}
+    - {fileID: 5636957905214456618, guid: a74ef814841e1264f9caa59f8d12cf57, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Well
+    prefabs:
+    - {fileID: 3347129475782373409, guid: ece35f78a1fec9e4085a8b2a5f15148a, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Sign
+    prefabs:
+    - {fileID: 6733198611354249176, guid: 58271a31bbb3d8941a392b907e9cbc5a, type: 3}
+    - {fileID: 1153117449107627279, guid: 1906dcefe76ac554a8739f25317803fe, type: 3}
+    - {fileID: 5217012657005622801, guid: 7858107b3861fd94fbdfd3c4545a9da3, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: HorseHitch
+    prefabs:
+    - {fileID: 4171862771308067522, guid: 4699d14056b59a64ba974c26a5d7915a, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Fireplace
+    prefabs:
+    - {fileID: 7771117228867690999, guid: b8c19df0f97c53e46a19c6da45ecab43, type: 3}
+    - {fileID: 5488211078462115674, guid: b2a806c9a79183e4999b61db8ac7f0a1, type: 3}
+    - {fileID: 5382931658967475936, guid: 5fcfede59b6afa64d99b40426743a5ad, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: FireTripod
+    prefabs:
+    - {fileID: 3888520709147037420, guid: c7144c40c33f3ff4a80577ffd7629ac1, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Tent
+    prefabs:
+    - {fileID: 5036276263380499166, guid: eaba0d5d851714d4ebdefa3ab9809493, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: TanningRack
+    prefabs:
+    - {fileID: 1669763300734273779, guid: c6a6b356e7a48974696a5b7029b7b02b, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: CampItem
+    prefabs:
+    - {fileID: 7025135229666190979, guid: d7781497557b7904aa0f3af82aa5b195, type: 3}
+    - {fileID: 7276986293683805013, guid: db636ac1aaf06bf47921e0da33a2e9e1, type: 3}
+    - {fileID: 4955066982439744087, guid: e7e27dd1eba7b364ba787c48c5da2083, type: 3}
+    - {fileID: 3800876610635840619, guid: 52489e9e4b3c75d41b578c339d19130c, type: 3}
+    - {fileID: 499786795716729791, guid: b7dc9c494382cec4ab851f2c1a3b1ae9, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Crate
+    prefabs:
+    - {fileID: 7783182128457828358, guid: 58a5427cb8bfc0c40b7f4d6acc630e9c, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Cart
+    prefabs:
+    - {fileID: 6356239735690917478, guid: 038c019db003bfd40ac5f59bf358472b, type: 3}
+    - {fileID: 8871243273156336558, guid: f0fb903234e7e79469dac336a07daf6a, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: StoneArch
+    prefabs:
+    - {fileID: 3364504985575406310, guid: 742792758f20b624b86daee73489a57b, type: 3}
+    yawOffset: 0
+    centerPivot: 1
+    nativeHeights: []
+    nativeWidths: []
+  - id: StoneWall
+    prefabs:
+    - {fileID: 7644362542474681750, guid: 0fe68fb18e05a154b8bf44b142482072, type: 3}
+    yawOffset: -90
+    centerPivot: 1
+    nativeHeights: []
+    nativeWidths: []
+  - id: StoneWallSmall
+    prefabs:
+    - {fileID: 6130640064842472573, guid: 416274a0a63517c40b315a92856eef88, type: 3}
+    - {fileID: 8153918729257342450, guid: e4cdf7c643b856e42aff16e84d6bbb90, type: 3}
+    yawOffset: -90
+    centerPivot: 1
+    nativeHeights: []
+    nativeWidths: []
+  - id: StoneWallEnd
+    prefabs:
+    - {fileID: 9033724449187618114, guid: 351c4bd18b58c5e4791bdd0f6cf59d09, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: StoneWallPillar
+    prefabs:
+    - {fileID: 8955701038796510936, guid: 43cdd8b9385714841acdce729ae1d7a5, type: 3}
+    - {fileID: 1502051216878091673, guid: a8ccda94215ece64e860b2311a752e82, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Gate
+    prefabs:
+    - {fileID: 4001203292332482590, guid: 6b40117f44be6114eaa8219c883f7578, type: 3}
+    yawOffset: -90
+    centerPivot: 1
+    nativeHeights: []
+    nativeWidths: []
+  - id: Birdhouse
+    prefabs:
+    - {fileID: 6741032424375284575, guid: 6efc7041a3361cc4b8e33a9dc8a521e1, type: 3}
+    - {fileID: 6598599542685579731, guid: 74f6a6347338629448876f903d0d346e, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: WindChime
+    prefabs:
+    - {fileID: 6662188897073533594, guid: 97b2531467fc90d41835bb3c268a26ed, type: 3}
+    - {fileID: 8036438950799461199, guid: ac93fd79ecdc7204da783821812cb6a5, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Kite
+    prefabs:
+    - {fileID: 7111185216104297242, guid: 20c29c53cf73422458e7b68b9117b378, type: 3}
+    - {fileID: 488407841946663184, guid: 3fa2f668f51e07443801b1c4f0802852, type: 3}
+    - {fileID: 7363942670949911233, guid: 64171a7ec6ae0d14888e56c4c4c8a2cc, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: WaterWheel
+    prefabs:
+    - {fileID: 6457015051466870481, guid: 8cee3e5c367e19f448cf4da18f817bc5, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Goods
+    prefabs:
+    - {fileID: 5781694286754335005, guid: d0576d52436bc0c4eb18c7a25ddfcdf3, type: 3}
+    - {fileID: 4579834156601985065, guid: fa8fc41f424824b4b9d9fcdbdad5d974, type: 3}
+    - {fileID: 5063113824184492847, guid: 9986e72a691bcad4aa272e7f9a76d342, type: 3}
+    - {fileID: 1414887969237499401, guid: 6e3cfe8cda1ce5449b002fd1348507fc, type: 3}
+    - {fileID: 3813589974846415466, guid: 70ffc489c79a14a4caf59aa6cb7d74c2, type: 3}
+    - {fileID: 5444336025286748187, guid: 6e3a10216d721d543bc636786be4e840, type: 3}
+    - {fileID: 1805285506636410991, guid: 5697a9a014822354e84dd5e8c2543a8f, type: 3}
+    - {fileID: 8288444301615329014, guid: dc3eef6903085924c905f6658187df4e, type: 3}
+    - {fileID: 5288045579682262824, guid: 642bcdf2dd6025d46979fb8e1a12524b, type: 3}
+    - {fileID: 1485297021483670739, guid: 3d6a2fae03698e24fb47a00c70ec4a7f, type: 3}
+    - {fileID: 869612369919779844, guid: d825231838da371419485eb659d67eb9, type: 3}
+    - {fileID: 8752115278972753073, guid: 53e689cdb89924f4eacb5b2f01c0bae0, type: 3}
+    - {fileID: 4072335763191719239, guid: e9d41c6ea1514904dbf94bdc4a614ff4, type: 3}
+    - {fileID: 4109757446176497534, guid: c75777bdaa2c56b4fbddbb932ffcf935, type: 3}
+    - {fileID: 4309575931106184802, guid: 4300f072a6700ed47b2b1486aeb7abea, type: 3}
+    - {fileID: 2057888889428814484, guid: d43f03b6ed2016646bf90d3202b12d8b, type: 3}
+    - {fileID: 3899388600755789835, guid: 3f9aa7a9468b6334a85c8de52d10c5e5, type: 3}
+    - {fileID: 3684257990859168837, guid: 239f386842a511a4c9112989fdef5705, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Chest
+    prefabs:
+    - {fileID: 4003603189485666069, guid: d2d1684b47b3c254ca653563fce46e21, type: 3}
+    - {fileID: 7733459185497637162, guid: 8055111d261e730409fd149f04475ce1, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Table
+    prefabs:
+    - {fileID: 2234192276595900150, guid: 64f4594a7237f5c4bba17f2e2e903b2d, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: Chair
+    prefabs:
+    - {fileID: 4655428122252159713, guid: adcff36b55f7dee48a7f4bd1ee182e74, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: HorizonHill
+    prefabs:
+    - {fileID: 919132149155446097, guid: 922c0062aa0f0fc4ba6f81b77c8cd38c, type: 3}
+    - {fileID: 2012719214090355382, guid: b85a341c73412c24ebc794554b2834a8, type: 3}
+    - {fileID: 8078062440341053455, guid: 8fd998070dcc4b1419ee4e57977c643c, type: 3}
+    - {fileID: 8350975585299280391, guid: 903f80b2c9fddf3468cf60333252c50a, type: 3}
+    - {fileID: 8027548303899327393, guid: 1c48cce84268c5c4ab5d038759b49b11, type: 3}
+    - {fileID: 8077536015443650397, guid: 24286fa4b7048fd4fabfe1109230a657, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  - id: HorizonMountain
+    prefabs:
+    - {fileID: 1281693231686000807, guid: 3ec0e1c01c9ca62479f615e4b7590637, type: 3}
+    - {fileID: 7011771666569883076, guid: 1278b4a0c304ae24a8751d099610af62, type: 3}
+    - {fileID: 7794831731080064089, guid: 41973aea592d78d4d859c3633325aad3, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights: []
+    nativeWidths: []
+  details:
+  - id: TallGrass
+    prefabs:
+    - {fileID: 8236021871104235022, guid: 94e1a6ffb48cbc74a985d54a15101b78, type: 3}
+    - {fileID: 2319602038486150113, guid: 81f8f6731cefa4541bb22e0d721c5c26, type: 3}
+    - {fileID: 4483105846905729119, guid: 2b6343abe39af5742bae336e9d136535, type: 3}
+    - {fileID: 330353793491971869, guid: ad6224faf6edbb24f943c7c434633b40, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights:
+    - 0.97313
+    - 1.0370885
+    - 0.9386012
+    - 0.9386012
+    nativeWidths:
+    - 1
+    - 1.7851174
+    - 1.7340838
+    - 4.619046
+  - id: MedGrass
+    prefabs:
+    - {fileID: 5299098951002441028, guid: b27d43af3a4c8a94ab56ef73d5c3d7c8, type: 3}
+    - {fileID: 4640527563940238886, guid: 7bcd19482ea71014f8038cb24394b4e5, type: 3}
+    - {fileID: 3740932079269569272, guid: 985f2380633c3614d8f004c07515d56e, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights:
+    - 0.47313002
+    - 0.50422627
+    - 0.45508507
+    nativeWidths:
+    - 1
+    - 1.7851174
+    - 1.7340838
+  - id: ShortGrass
+    prefabs:
+    - {fileID: 621707133457824171, guid: 3d2ccd8dc1c21df44ab2dbd545dfd9bc, type: 3}
+    - {fileID: 2628688636151724968, guid: e3df13de6667667489c30c1ff64c5f24, type: 3}
+    - {fileID: 3678185371872137778, guid: 0b3f38b8ce1b54d4da93302f4cdb04ba, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights:
+    - 0.22313003
+    - 0.23779516
+    - 0.21332699
+    nativeWidths:
+    - 1
+    - 1.7851174
+    - 1.7340838
+  - id: Wildflowers
+    prefabs:
+    - {fileID: 2531480672665216541, guid: 61824db0d33774a448f543b1b58ec1e0, type: 3}
+    - {fileID: 8524888244086471205, guid: bdbdd916008cf16478586ed29357764d, type: 3}
+    - {fileID: 9076641674525226426, guid: 675a118a8d3b9954883bd45d6f01fccd, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights:
+    - 0.59743637
+    - 0.5749244
+    - 0.5943481
+    nativeWidths:
+    - 0.68225574
+    - 0.7363646
+    - 0.7661877
+  - id: FlatFlowers
+    prefabs:
+    - {fileID: 8382010348597308228, guid: 66ce842cd71b3bc4d8703e8a308eee28, type: 3}
+    - {fileID: 2738316951183799034, guid: b0379980b4892fc42932cc49928ecec8, type: 3}
+    - {fileID: 6019120128306150423, guid: 268b4521aab91ca4ba49212902b69d87, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights:
+    - 0.14250039
+    - 0.14515673
+    - 0.17886777
+    nativeWidths:
+    - 2.0657897
+    - 2.157782
+    - 2.2476826
+  - id: GroundCover
+    prefabs:
+    - {fileID: 5331516828836616308, guid: b73f1edb86385514db31246063c938ef, type: 3}
+    - {fileID: 4783963495783130100, guid: 0448744feb0a7cc498967649cb8cab8b, type: 3}
+    - {fileID: 787944143853363945, guid: 3db95288ae7290c46acee4a3481a45a9, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights:
+    - 1.4919256
+    - 0.5287418
+    - 1.4919256
+    nativeWidths:
+    - 2.8889863
+    - 1.9124242
+    - 2.0821488
+  - id: SunflowerDetail
+    prefabs:
+    - {fileID: 6153594646329822413, guid: 0d63475252d7b00449067b3922df02a0, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights:
+    - 1.5697775
+    nativeWidths:
+    - 0.78126013
+  - id: GenFlowers
+    prefabs:
+    - {fileID: 5265308297076772059, guid: 5a7e6d99146ed604abc48a3d57803d36, type: 3}
+    - {fileID: 91085495774434447, guid: 15ad3f824d5b11c45a170fa12f6f6a87, type: 3}
+    - {fileID: 2335997518690536914, guid: 77828d9a4f4684f45bcca72619783e53, type: 3}
+    - {fileID: 4616345493256948163, guid: 66ab7019fccbb194ea344239a68f284b, type: 3}
+    - {fileID: 7791542951938551264, guid: 2759720fbce4d3e439e3b918382dd004, type: 3}
+    - {fileID: 3207211200394796827, guid: ed01229011126dc4f96805268a3bfa88, type: 3}
+    - {fileID: 4761116242674963571, guid: 93739a76355e20441b4cee0f7ede67c5, type: 3}
+    - {fileID: 7762963213496251399, guid: 515467422c944534caca0556099dd68b, type: 3}
+    yawOffset: 0
+    centerPivot: 0
+    nativeHeights:
+    - 0.47569674
+    - 0.47569674
+    - 0.47569674
+    - 1.064024
+    - 0.91141164
+    - 0.8822457
+    - 1.02429
+    - 1.1075058
+    nativeWidths:
+    - 1.4771607
+    - 0.9971977
+    - 0.57007754
+    - 0.81501657
+    - 0.63986087
+    - 0.42322242
+    - 0.52335584
+    - 0.6720137
+  fencePieceLength: 2.5410166
+  stoneWallLength: 5.2102733
+  terrainLayers:
+  - {fileID: 8574412962073106934, guid: e8a19b753c680d24c98f0aee4c3f6f1a, type: 2}
+  - {fileID: 8574412962073106934, guid: f5816bdc445560c4fac91b4e187feb46, type: 2}
+  - {fileID: 8574412962073106934, guid: 224d63e1442241943b8cafe00b71bdbd, type: 2}
+  - {fileID: 8574412962073106934, guid: 8861a1c84e87a8f438805da2898b15df, type: 2}
+  - {fileID: 8574412962073106934, guid: 9f5c36e3546010746940a515bbf0494b, type: 2}
+  - {fileID: 8574412962073106934, guid: fda3942d375f20d4ab1bce4b8da63de5, type: 2}
+  - {fileID: 8574412962073106934, guid: 190b0e2637dfce44091cff6d83f98c88, type: 2}
+  - {fileID: 8574412962073106934, guid: 244d45ac831846c45bd694df07325eb5, type: 2}
+  waterPlane: {fileID: 6062468392298318188, guid: 950aba45967a14a43a46463a4d3d3004, type: 3}
+  waterMaterial: {fileID: 2100000, guid: ac3a16009d436a44085168c915204537, type: 2}
+  backgroundHill: {fileID: 919132149155446097, guid: 922c0062aa0f0fc4ba6f81b77c8cd38c, type: 3}
+  backgroundHillMaterial: {fileID: 2100000, guid: d45c1b3e52c0d13499a18b8c53400754, type: 2}
+  rotateXController: {fileID: 9100000, guid: c6df5c18065248f42a28e660b69decff, type: 2}
+  rotateZController: {fileID: 9100000, guid: bdffc66125d9b2142baa97af7460de1e, type: 2}

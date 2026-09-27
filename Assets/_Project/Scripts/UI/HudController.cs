@@ -1,0 +1,438 @@
+using System.Collections;
+using System.Collections.Generic;
+using System.Text;
+using MedievalZen.Environment;
+using MedievalZen.Player;
+using MedievalZen.Roads;
+using MedievalZen.Travel;
+using MedievalZen.World;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace MedievalZen.UI
+{
+    /// <summary>
+    /// The small, parchment-tinted screen HUD, built in code on its Canvas at Awake: time of day and day count (top left),
+    /// destination + remaining road distance and mode chips (top right), a contextual prompt (bottom centre), queued toasts,
+    /// a choice list (signposts) and a full-screen fade layer. While the map is open (<see cref="MapMode"/>) everything but
+    /// the prompt fades out. Access it through <see cref="Instance"/>.
+    /// </summary>
+    [RequireComponent(typeof(Canvas))]
+    [DisallowMultipleComponent]
+    [DefaultExecutionOrder(50)]
+    public sealed class HudController : MonoBehaviour
+    {
+        [Header("References (found automatically when empty)")]
+        [SerializeField, Tooltip("The player's travel state (destination, auto-travel).")]
+        private PlayerTravel travel;
+
+        [SerializeField, Tooltip("The player's camera rig (first/third person chip).")]
+        private PlayerCameraRig cameraRig;
+
+        [Header("Timing")]
+        [SerializeField, Min(0.5f), Tooltip("Seconds a toast stays fully visible.")]
+        private float toastSeconds = 3.2f;
+
+        [SerializeField, Min(0.05f), Tooltip("Seconds a toast takes to fade in or out.")]
+        private float toastFadeSeconds = 0.6f;
+
+        [SerializeField, Min(0.05f), Tooltip("Seconds the HUD and prompt take to fade in or out.")]
+        private float panelFadeSeconds = 0.35f;
+
+        [SerializeField, Min(0.1f), Tooltip("Seconds between refreshes of the destination distance.")]
+        private float distanceRefreshSeconds = 0.5f;
+
+        private readonly Queue<string> toasts = new Queue<string>();
+        private readonly StringBuilder builder = new StringBuilder(256);
+
+        private CanvasGroup hudGroup;
+        private Text timeText;
+        private Text dayText;
+        private CanvasGroup destinationGroup;
+        private Text destinationText;
+        private Text chipsText;
+        private CanvasGroup promptGroup;
+        private Text promptText;
+        private CanvasGroup toastGroup;
+        private Text toastText;
+        private CanvasGroup menuGroup;
+        private Text menuTitle;
+        private Text menuBody;
+        private Text menuFooter;
+        private Image fadeImage;
+
+        private string currentToast;
+        private float toastTimer;
+        private int toastPhase;          // 0 idle, 1 fade in, 2 hold, 3 fade out
+        private bool promptVisible;
+        private bool menuVisible;
+        private string[] menuLines;
+        private int lastMinute = -1;
+        private int lastDay = -1;
+        private bool lastTravelling;
+        private CameraMode lastMode;
+        private bool chipsDirty = true;
+        private float nextDistanceRefresh;
+        private Settlement routedDestination;
+        private float routedDistance = -1f;
+        private float nextRouteRefresh;
+        private string lastDestinationLine;
+        private Coroutine fadeRoutine;
+
+        /// <summary>The HUD of the loaded scene.</summary>
+        public static HudController Instance { get; private set; }
+
+        /// <summary>True while the held map is open: the HUD hides except for the prompt.</summary>
+        public bool MapMode { get; set; }
+
+        /// <summary>Current alpha of the full-screen fade (0 = clear, 1 = black).</summary>
+        public float FadeAlpha => fadeImage != null ? fadeImage.color.a : 0f;
+
+        /// <summary>True while the choice list is shown.</summary>
+        public bool IsMenuVisible => menuVisible;
+
+        /// <summary>Queues a toast message (duplicates of the one on screen are ignored).</summary>
+        public void ShowToast(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return;
+            if (toastPhase != 0 && message == currentToast) return;
+            if (toasts.Count > 0 && message == LastQueued()) return;
+            toasts.Enqueue(message);
+        }
+
+        /// <summary>Shows the contextual prompt at the bottom of the screen (e.g. "E — Read signpost").</summary>
+        public void ShowPrompt(string message)
+        {
+            if (promptText == null) return;
+            if (!ReferenceEquals(promptText.text, message) && promptText.text != message) promptText.text = message;
+            promptVisible = true;
+        }
+
+        /// <summary>Hides the contextual prompt.</summary>
+        public void HidePrompt()
+        {
+            promptVisible = false;
+        }
+
+        /// <summary>Fades the full-screen overlay to <paramref name="alpha"/> (1 = black) over <paramref name="seconds"/>;
+        /// yield on the returned coroutine to wait for it.</summary>
+        public Coroutine Fade(float alpha, float seconds)
+        {
+            if (fadeRoutine != null) StopCoroutine(fadeRoutine);
+            fadeRoutine = StartCoroutine(FadeRoutine(Mathf.Clamp01(alpha), Mathf.Max(0f, seconds)));
+            return fadeRoutine;
+        }
+
+        /// <summary>Shows a choice list with <paramref name="lines"/>, highlighting <paramref name="selected"/>.</summary>
+        public void ShowMenu(string title, string[] lines, int selected, string footer)
+        {
+            if (menuGroup == null) return;
+            menuLines = lines;
+            menuTitle.text = title;
+            menuFooter.text = footer;
+            menuVisible = true;
+            SetMenuSelection(selected);
+        }
+
+        /// <summary>Moves the highlight of the choice list.</summary>
+        public void SetMenuSelection(int selected)
+        {
+            if (menuBody == null || menuLines == null) return;
+            builder.Clear();
+            for (int i = 0; i < menuLines.Length; i++)
+            {
+                if (i > 0) builder.Append('\n');
+                if (i == selected) builder.Append("<color=#8C2914><b>›  ").Append(menuLines[i]).Append("</b></color>");
+                else builder.Append("    ").Append(menuLines[i]);
+            }
+
+            menuBody.text = builder.ToString();
+        }
+
+        /// <summary>Hides the choice list.</summary>
+        public void HideMenu()
+        {
+            menuVisible = false;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            Instance = null;
+        }
+
+        private void Awake()
+        {
+            Instance = this;
+            var canvas = GetComponent<Canvas>();
+            if (canvas.renderMode == RenderMode.WorldSpace) canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = Mathf.Max(canvas.sortingOrder, 10);
+            var scaler = GetComponent<CanvasScaler>();
+            if (scaler == null) scaler = gameObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+            Build();
+        }
+
+        private void Start()
+        {
+            if (travel == null) travel = FindFirstObjectByType<PlayerTravel>();
+            if (cameraRig == null) cameraRig = FindFirstObjectByType<PlayerCameraRig>();
+            if (travel != null)
+            {
+                travel.Notice += ShowToast;
+                travel.DestinationChanged += OnDestinationChanged;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (travel != null)
+            {
+                travel.Notice -= ShowToast;
+                travel.DestinationChanged -= OnDestinationChanged;
+            }
+
+            if (Instance == this) Instance = null;
+        }
+
+        private void OnDestinationChanged(Settlement settlement)
+        {
+            routedDestination = null;
+            routedDistance = -1f;
+            nextRouteRefresh = 0f;
+            nextDistanceRefresh = 0f;
+        }
+
+        private void Update()
+        {
+            float dt = Time.unscaledDeltaTime;
+            float step = dt / panelFadeSeconds;
+            hudGroup.alpha = Mathf.MoveTowards(hudGroup.alpha, MapMode ? 0f : 1f, step);
+            promptGroup.alpha = Mathf.MoveTowards(promptGroup.alpha, promptVisible ? 1f : 0f, step);
+            menuGroup.alpha = Mathf.MoveTowards(menuGroup.alpha, menuVisible ? 1f : 0f, step);
+
+            UpdateClock();
+            UpdateChips();
+            UpdateDestination();
+            UpdateToast(dt);
+        }
+
+        private void UpdateClock()
+        {
+            DayCycle cycle = DayCycle.Current;
+            if (cycle == null)
+            {
+                if (lastMinute != -2)
+                {
+                    lastMinute = -2;
+                    timeText.text = "--:--";
+                    dayText.text = string.Empty;
+                }
+
+                return;
+            }
+
+            int minute = DayClock.MinuteOfDay(cycle.Hour);
+            if (minute != lastMinute)
+            {
+                lastMinute = minute;
+                timeText.text = $"{minute / 60:00}:{minute % 60:00}";
+            }
+
+            if (cycle.Day != lastDay)
+            {
+                lastDay = cycle.Day;
+                dayText.text = $"Day {cycle.Day}";
+            }
+        }
+
+        private void UpdateChips()
+        {
+            bool travelling = travel != null && travel.IsTravelling;
+            CameraMode mode = cameraRig != null ? cameraRig.Mode : CameraMode.ThirdPerson;
+            if (!chipsDirty && travelling == lastTravelling && mode == lastMode) return;
+            chipsDirty = false;
+            lastTravelling = travelling;
+            lastMode = mode;
+            chipsText.text = (travelling ? "Auto-travel" : "Walk") + "   ·   " + (mode == CameraMode.FirstPerson ? "1st person" : "3rd person");
+        }
+
+        private void UpdateDestination()
+        {
+            if (Time.unscaledTime < nextDistanceRefresh) return;
+            nextDistanceRefresh = Time.unscaledTime + distanceRefreshSeconds;
+
+            Settlement destination = travel != null ? travel.Destination : null;
+            string line = null;
+            if (destination != null)
+            {
+                float remaining = travel.IsTravelling ? travel.Traveller.RemainingDistance : RouteDistance(destination);
+                line = remaining >= 0f ? $"{destination.Name}   ·   {UiKit.FormatDistance(remaining)}" : destination.Name;
+            }
+
+            if (line == lastDestinationLine) return;
+            lastDestinationLine = line;
+            destinationGroup.alpha = line != null ? 1f : 0f;
+            destinationText.text = line ?? string.Empty;
+        }
+
+        private float RouteDistance(Settlement destination)
+        {
+            if (destination == routedDestination && Time.unscaledTime < nextRouteRefresh) return routedDistance;
+            routedDestination = destination;
+            nextRouteRefresh = Time.unscaledTime + 2f;
+            routedDistance = -1f;
+            RoadNetwork roads = GameWorld.Current != null ? GameWorld.Current.Roads : null;
+            if (roads == null || roads.Segments.Count == 0 || travel == null) return routedDistance;
+            Vector3 position = travel.transform.position;
+            RoadLocation start = roads.Project(position);
+            if (roads.TryFindRoute(start, destination, out RoadRoute route))
+            {
+                Vector3 onRoad = start.Position;
+                routedDistance = route.TotalLength + new Vector2(onRoad.x - position.x, onRoad.z - position.z).magnitude;
+            }
+
+            return routedDistance;
+        }
+
+        private void UpdateToast(float dt)
+        {
+            switch (toastPhase)
+            {
+                case 0:
+                    if (toasts.Count == 0) return;
+                    currentToast = toasts.Dequeue();
+                    toastText.text = currentToast;
+                    toastPhase = 1;
+                    toastTimer = 0f;
+                    break;
+                case 1:
+                    toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, 1f, dt / toastFadeSeconds);
+                    if (toastGroup.alpha >= 1f)
+                    {
+                        toastPhase = 2;
+                        toastTimer = 0f;
+                    }
+
+                    break;
+                case 2:
+                    toastTimer += dt;
+                    if (toastTimer >= toastSeconds || (toasts.Count > 0 && toastTimer >= toastSeconds * 0.5f)) toastPhase = 3;
+                    break;
+                default:
+                    toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, 0f, dt / toastFadeSeconds);
+                    if (toastGroup.alpha <= 0f)
+                    {
+                        toastPhase = 0;
+                        currentToast = null;
+                    }
+
+                    break;
+            }
+        }
+
+        private string LastQueued()
+        {
+            string last = null;
+            foreach (string queued in toasts) last = queued;
+            return last;
+        }
+
+        private IEnumerator FadeRoutine(float target, float seconds)
+        {
+            float start = fadeImage.color.a;
+            float t = 0f;
+            while (t < seconds)
+            {
+                t += Time.unscaledDeltaTime;
+                float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / seconds));
+                SetFade(Mathf.Lerp(start, target, k));
+                yield return null;
+            }
+
+            SetFade(target);
+            fadeRoutine = null;
+        }
+
+        private void SetFade(float alpha)
+        {
+            Color c = fadeImage.color;
+            c.a = alpha;
+            fadeImage.color = c;
+            fadeImage.enabled = alpha > 0.001f;
+        }
+
+        // ------------------------------------------------------------------ layout
+
+        private void Build()
+        {
+            Transform root = transform;
+
+            // Top-left: time + day.
+            RectTransform hud = UiKit.CreateRect("Hud", root);
+            UiKit.Stretch(hud);
+            hudGroup = hud.gameObject.AddComponent<CanvasGroup>();
+            hudGroup.blocksRaycasts = false;
+            hudGroup.interactable = false;
+
+            Image clock = UiKit.CreatePanel("Clock", hud, UiKit.Parchment);
+            UiKit.Place(clock.rectTransform, new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(170f, 62f));
+            timeText = UiKit.CreateText("Time", clock.transform, 28, TextAnchor.MiddleLeft, UiKit.Ink, FontStyle.Bold);
+            UiKit.Place(timeText.rectTransform, new Vector2(0f, 0.5f), new Vector2(16f, 0f), new Vector2(90f, 40f));
+            dayText = UiKit.CreateText("Day", clock.transform, 18, TextAnchor.MiddleRight, UiKit.FadedInk, FontStyle.Italic);
+            UiKit.Place(dayText.rectTransform, new Vector2(1f, 0.5f), new Vector2(-14f, 0f), new Vector2(70f, 40f));
+
+            // Top-right: destination + chips.
+            Image destination = UiKit.CreatePanel("Destination", hud, UiKit.Parchment);
+            UiKit.Place(destination.rectTransform, new Vector2(1f, 1f), new Vector2(-24f, -24f), new Vector2(380f, 44f));
+            destinationGroup = destination.gameObject.AddComponent<CanvasGroup>();
+            destinationGroup.alpha = 0f;
+            destinationText = UiKit.CreateText("Text", destination.transform, 20, TextAnchor.MiddleCenter, UiKit.Ink, FontStyle.Italic);
+            UiKit.Stretch(destinationText.rectTransform);
+
+            Image chips = UiKit.CreatePanel("Chips", hud, new Color(UiKit.Parchment.r, UiKit.Parchment.g, UiKit.Parchment.b, 0.6f));
+            UiKit.Place(chips.rectTransform, new Vector2(1f, 1f), new Vector2(-24f, -76f), new Vector2(260f, 32f));
+            chipsText = UiKit.CreateText("Text", chips.transform, 16, TextAnchor.MiddleCenter, UiKit.FadedInk);
+            UiKit.Stretch(chipsText.rectTransform);
+
+            // Bottom-centre prompt.
+            Image prompt = UiKit.CreatePanel("Prompt", root, UiKit.Parchment);
+            UiKit.Place(prompt.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 60f), new Vector2(560f, 46f));
+            promptGroup = prompt.gameObject.AddComponent<CanvasGroup>();
+            promptGroup.alpha = 0f;
+            promptText = UiKit.CreateText("Text", prompt.transform, 21, TextAnchor.MiddleCenter, UiKit.Ink);
+            UiKit.Stretch(promptText.rectTransform);
+
+            // Choice list (signposts), right of centre.
+            Image menu = UiKit.CreatePanel("Choices", root, new Color(UiKit.Parchment.r, UiKit.Parchment.g, UiKit.Parchment.b, 0.92f));
+            UiKit.Place(menu.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(260f, 20f), new Vector2(520f, 360f));
+            menuGroup = menu.gameObject.AddComponent<CanvasGroup>();
+            menuGroup.alpha = 0f;
+            menuTitle = UiKit.CreateText("Title", menu.transform, 24, TextAnchor.UpperCenter, UiKit.Ink, FontStyle.Bold);
+            UiKit.Place(menuTitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -16f), new Vector2(480f, 34f));
+            menuBody = UiKit.CreateText("Body", menu.transform, 20, TextAnchor.UpperLeft, UiKit.Ink);
+            UiKit.Place(menuBody.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -60f), new Vector2(470f, 240f));
+            menuBody.lineSpacing = 1.2f;
+            menuFooter = UiKit.CreateText("Footer", menu.transform, 16, TextAnchor.LowerCenter, UiKit.FadedInk, FontStyle.Italic);
+            UiKit.Place(menuFooter.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 14f), new Vector2(480f, 26f));
+
+            // Full-screen fade.
+            RectTransform fade = UiKit.CreateRect("Fade", root);
+            UiKit.Stretch(fade);
+            fadeImage = fade.gameObject.AddComponent<Image>();
+            fadeImage.color = new Color(0.02f, 0.02f, 0.03f, 0f);
+            fadeImage.raycastTarget = false;
+            fadeImage.enabled = false;
+
+            // Toasts sit above the fade so "You rest until dawn" reads on black.
+            Image toast = UiKit.CreatePanel("Toast", root, UiKit.Parchment);
+            UiKit.Place(toast.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -120f), new Vector2(620f, 56f));
+            toastGroup = toast.gameObject.AddComponent<CanvasGroup>();
+            toastGroup.alpha = 0f;
+            toastText = UiKit.CreateText("Text", toast.transform, 26, TextAnchor.MiddleCenter, UiKit.Ink, FontStyle.Italic);
+            UiKit.Stretch(toastText.rectTransform);
+        }
+    }
+}

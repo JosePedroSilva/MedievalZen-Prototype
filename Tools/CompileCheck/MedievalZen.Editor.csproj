@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Type-checks Assets/_Project/Editor (asmdef "MedievalZen.Editor"). Settings: Directory.Build.props. -->
+  <PropertyGroup>
+    <AssemblyName>MedievalZen.Editor</AssemblyName>
+    <RootNamespace>MedievalZen.EditorTools</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(ProjectRoot)Assets\_Project\Editor\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="MedievalZen.Runtime.csproj" />
+    <!-- Package assemblies (Input System, uGUI, URP/Core RP) the editor asmdef references. -->
+    <Reference Include="$(ScriptAssembliesDir)\*.dll"
+               Exclude="$(ScriptAssembliesDir)\*Test*.dll;$(ScriptAssembliesDir)\*CodeGen*.dll;$(ScriptAssembliesDir)\*DocCode*.dll;$(ScriptAssembliesDir)\Assembly-CSharp*.dll;$(ScriptAssembliesDir)\MedievalZen*.dll">
+      <HintPath>%(FullPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- UnityEditor.dll + UnityEditor.*Module.dll -->
+    <Reference Include="$(UnityManagedDir)\UnityEditor.dll;$(UnityManagedDir)\UnityEditor.*.dll">
+      <HintPath>%(FullPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
