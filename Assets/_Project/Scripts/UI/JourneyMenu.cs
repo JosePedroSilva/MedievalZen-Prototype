@@ -70,6 +70,7 @@ namespace MedievalZen.UI
         private ProceduralWindAudio wind;
         private GameWorld world;
         private MedievalZen.Endless.EndlessWorld endless;
+        private MedievalZen.Cinematic.CinematicDirector director;
 
         // ------------------------------------------------------------------ state
         private JourneySettings settings = new JourneySettings();
@@ -138,6 +139,9 @@ namespace MedievalZen.UI
         private Text lookValue;
         private JourneyStepper invertStepper;
         private JourneyStepper hudStepper;
+        private GameObject cinematicHeader;
+        private JourneyStepper cinematicTravelStepper;
+        private JourneyStepper letterboxStepper;
 
         private ScrollRect travelScroll;
         private RectTransform travelContent;
@@ -282,6 +286,7 @@ namespace MedievalZen.UI
             travel = controller.GetComponent<PlayerTravel>();
             motor = controller.GetComponent<PlayerMotor>();
             interactor = controller.GetComponent<PlayerInteractor>();
+            director = controller.GetComponent<MedievalZen.Cinematic.CinematicDirector>();
             day = DayCycle.Current;
             weather = WeatherSystem.Current;
             atmosphere = AtmosphereController.Current;
@@ -354,6 +359,10 @@ namespace MedievalZen.UI
                 LookSpeed = cameraRig != null ? cameraRig.LookSensitivityScale : 1f,
                 InvertY = cameraRig != null && cameraRig.InvertY,
                 ShowHud = hud == null || hud.ShowHud,
+                CinematicCamera = director != null && director.CinematicCamera,
+                CinematicWhenTravelling = director == null || director.CinematicWhenTravelling,
+                Letterbox = director == null || director.Letterbox,
+                HudAlways = hud != null && hud.HudAlways,
             }.Clamp();
             settings = defaults.Clone();
         }
@@ -406,8 +415,25 @@ namespace MedievalZen.UI
                 cameraRig.InvertY = settings.InvertY;
             }
 
-            if (hud != null) hud.ShowHud = settings.ShowHud;
+            if (hud != null)
+            {
+                hud.ShowHud = settings.ShowHud;
+                hud.HudAlways = settings.HudAlways;
+            }
+
+            if (director != null)
+            {
+                director.CinematicCamera = settings.CinematicCamera;
+                director.CinematicWhenTravelling = settings.CinematicWhenTravelling;
+                director.Letterbox = settings.Letterbox;
+            }
         }
+
+        /// <summary>Index of the camera choice: through your eyes, over the shoulder, cinematic.</summary>
+        private int CameraIndex() => settings.CinematicCamera ? 2 : settings.Camera == CameraMode.FirstPerson ? 0 : 1;
+
+        /// <summary>Index of the HUD choice: shown, hidden, always.</summary>
+        private int HudIndex() => !settings.ShowHud ? 1 : settings.HudAlways ? 2 : 0;
 
         /// <summary>The scene's own time scale for its default choice (it may not be one of the five), else the choice's.</summary>
         private float ScaleFor(FlowOfTime flow) => flow == defaults.Flow ? baselineTimeScale : JourneyTime.FlowScale(flow);
@@ -458,10 +484,12 @@ namespace MedievalZen.UI
             windStepper.SetIndexWithoutNotify(settings.WindSound ? 1 : 0);
             windSlider.SetValueWithoutNotify(settings.WindVolume / JourneySettings.WindVolumeMax);
             if (cameraRig != null) settings.Camera = cameraRig.Mode;
-            cameraStepper.SetIndexWithoutNotify(settings.Camera == CameraMode.FirstPerson ? 0 : 1);
+            cameraStepper.SetIndexWithoutNotify(CameraIndex());
             lookSlider.SetValueWithoutNotify(settings.LookSpeed);
             invertStepper.SetIndexWithoutNotify(settings.InvertY ? 1 : 0);
-            hudStepper.SetIndexWithoutNotify(settings.ShowHud ? 0 : 1);
+            hudStepper.SetIndexWithoutNotify(HudIndex());
+            cinematicTravelStepper.SetIndexWithoutNotify(settings.CinematicWhenTravelling ? 0 : 1);
+            letterboxStepper.SetIndexWithoutNotify(settings.Letterbox ? 0 : 1);
             UpdateValueTexts();
             UpdateDayLengthText();
             if (day == null) statusText.text = "The road is quiet";
@@ -527,7 +555,7 @@ namespace MedievalZen.UI
             if (cameraRig != null && cameraRig.Mode != settings.Camera)
             {
                 settings.Camera = cameraRig.Mode;
-                cameraStepper.SetIndexWithoutNotify(settings.Camera == CameraMode.FirstPerson ? 0 : 1);
+                cameraStepper.SetIndexWithoutNotify(CameraIndex());
             }
         }
 
@@ -615,8 +643,23 @@ namespace MedievalZen.UI
 
         private void OnCamera(int index)
         {
+            settings.CinematicCamera = index == 2;
+            if (director != null) director.CinematicCamera = settings.CinematicCamera;
+            if (index == 2) return;   // the base mode stays what it was; the cinematic camera hands back to it
             settings.Camera = index == 0 ? CameraMode.FirstPerson : CameraMode.ThirdPerson;
             if (cameraRig != null) cameraRig.SetMode(settings.Camera);
+        }
+
+        private void OnCinematicTravel(int index)
+        {
+            settings.CinematicWhenTravelling = index == 0;
+            if (director != null) director.CinematicWhenTravelling = settings.CinematicWhenTravelling;
+        }
+
+        private void OnLetterbox(int index)
+        {
+            settings.Letterbox = index == 0;
+            if (director != null) director.Letterbox = settings.Letterbox;
         }
 
         private void OnLookSpeed(float value)
@@ -634,8 +677,13 @@ namespace MedievalZen.UI
 
         private void OnHud(int index)
         {
-            settings.ShowHud = index == 0;
-            if (hud != null) hud.ShowHud = settings.ShowHud;
+            settings.ShowHud = index != 1;
+            settings.HudAlways = index == 2;
+            if (hud != null)
+            {
+                hud.ShowHud = settings.ShowHud;
+                hud.HudAlways = settings.HudAlways;
+            }
         }
 
         private void OnQuit()
@@ -884,6 +932,10 @@ namespace MedievalZen.UI
             cameraStepper.transform.parent.gameObject.SetActive(hasCamera);
             lookSlider.transform.parent.gameObject.SetActive(hasCamera);
             invertStepper.transform.parent.gameObject.SetActive(hasCamera);
+            bool hasCinematic = hasCamera && director != null;
+            cinematicHeader.SetActive(hasCinematic);
+            cinematicTravelStepper.transform.parent.gameObject.SetActive(hasCinematic);
+            letterboxStepper.transform.parent.gameObject.SetActive(hasCinematic);
             pageAvailable[2] = true;   // the HUD toggle is always there
 
             RoadNetwork roads = world != null ? world.Roads : null;
@@ -1384,16 +1436,21 @@ namespace MedievalZen.UI
         {
             RectTransform stack = Stack(area);
             Header(stack, "Your eyes");
-            cameraStepper = StepperRow(stack, "Camera", new[] { "Through your eyes", "Over the shoulder" }, true, rows);
+            cameraStepper = StepperRow(stack, "Camera", new[] { "Through your eyes", "Over the shoulder", "Cinematic" }, true, rows);
             cameraStepper.Changed += OnCamera;
             lookSlider = SliderRow(stack, "Look speed", JourneySettings.LookSpeedMin, JourneySettings.LookSpeedMax, 0.05f, out lookValue, rows);
             lookSlider.onValueChanged.AddListener(OnLookSpeed);
             invertStepper = StepperRow(stack, "Look up/down", new[] { "Normal", "Inverted" }, true, rows);
             invertStepper.Changed += OnInvert;
+            cinematicHeader = Header(stack, "Cinematic camera").gameObject;
+            cinematicTravelStepper = StepperRow(stack, "Cinematic when travelling", new[] { "On", "Off" }, true, rows);
+            cinematicTravelStepper.Changed += OnCinematicTravel;
+            letterboxStepper = StepperRow(stack, "Letterbox", new[] { "On", "Off" }, true, rows);
+            letterboxStepper.Changed += OnLetterbox;
             Header(stack, "On screen");
-            hudStepper = StepperRow(stack, "Clock and destination", new[] { "Shown", "Hidden" }, true, rows);
+            hudStepper = StepperRow(stack, "Clock and destination", new[] { "Shown", "Hidden", "Always" }, true, rows);
             hudStepper.Changed += OnHud;
-            Info(stack, "Prompts and messages always show.");
+            Info(stack, "Prompts and messages always show. \"Always\" keeps the clock in cinematic shots too.");
         }
 
         private void BuildTravelPage(RectTransform area)

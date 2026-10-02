@@ -261,6 +261,22 @@ One `PlayerRig` prefab; all three modes share it.
 - Auto-travel route = `RoadNetwork.TryFindRoute(Project(player), destination)`.
 - Arrival: settlement trigger → toast "You arrive at <name>". At an inn, `Interact` → rest:
   fade to black, time skips to 06:00, fade in.
+- **Sitting** (user request 2026-10-02): `C` (gamepad East, the existing `Crouch` action) sits the traveller where
+  they stand, or on a seat within 2.5 m (log, stump, crate, chair, low rock, camp-fire surround, inn doorstep),
+  facing the best view (downhill, water, away from walls; the fire at a camp). `C`, `E` or moving stands up;
+  auto-travel pauses and resumes. Holding `Shift` while seated ramps time to ×20 of the chosen flow
+  (`DayCycle.FastForward`). The pose is procedural (`SeatedPose`, order 120: the pack has no sit clip): hips to
+  the seat, a two-bone solve per leg with planted feet, hands on thighs or knees; every angle is an inspector
+  field. `PlayerSeat` (order −42) owns the state.
+- **Cinematic camera** (user request 2026-10-02): `B` (gamepad d-pad up) toggles it; it starts by itself after 6 s
+  without input during auto-travel (setting, default on, third person) and 1.5 s after sitting down.
+  `CinematicDirector` (order −35) picks shots of 9–22 s with a seeded, context-weighted scheduler that never
+  repeats a type back to back: trailing wide, side tracking, leading, roadside tripod, crane, vista, low grass;
+  rest shots: push-in, profile, high orbit, over-the-shoulder, sky hold, across the fire. The camera never goes
+  under ground or water or inside a tree, stays within the built near tiles and 200 m of the traveller, and
+  changes shot if the traveller is hidden for a second. Nearby shots blend; others dip to black for 0.25 s.
+  Look input orbits the shot; move input ends it. Pure core: `ShotSolver`, `CinematicMath`. Journey menu → View:
+  Camera gains "Cinematic", plus "Cinematic when travelling" and "Letterbox" (settings version 2).
 - **Journey menu** (`Esc` / Start; user request 2026-09-27): a right-hand side panel built by the HUD at
   runtime, so it needs no scene changes (a HUD is created for scenes without one). Pages Time / Sky /
   View / Where to?; every change applies live behind the panel. The time slider and the Dawn / Noon /

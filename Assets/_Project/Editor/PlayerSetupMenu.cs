@@ -101,6 +101,7 @@ namespace MedievalZen.EditorTools
                 root.AddComponent<AutoTraveller>();
                 root.AddComponent<PlayerTravel>();
                 var playerController = root.AddComponent<PlayerController>();
+                AddWatchingComponents(root);
 
                 // Visual: the Synty peasant as a nested prefab, feet on the rig origin.
                 var visualRoot = new GameObject("Visual").transform;
@@ -204,7 +205,7 @@ namespace MedievalZen.EditorTools
                     return false;
                 }
 
-                Debug.Log($"Upgraded {PrefabPath}: Animator (PlayerLocomotion.controller rebuilt, no root motion, always animate) + PlayerAnimator + measured grounding (see the grounding log).");
+                Debug.Log($"Upgraded {PrefabPath}: Animator (PlayerLocomotion.controller rebuilt, no root motion, always animate) + PlayerAnimator + measured grounding (see the grounding log) + sitting and the cinematic camera.");
                 return true;
             }
             finally
@@ -246,7 +247,20 @@ namespace MedievalZen.EditorTools
             EditorUtility.SetDirty(playerAnimator);
 
             GroundCharacter(root, visual, animator, controller, avatar);
+            AddWatchingComponents(root);
             return true;
+        }
+
+        /// <summary>
+        /// Sitting down (<see cref="PlayerSeat"/>, <see cref="SeatedPose"/>) and the cinematic camera
+        /// (<see cref="MedievalZen.Cinematic.CinematicDirector"/>). The PlayerController also adds them at runtime when a rig lacks
+        /// them, so older scenes work without this. Idempotent.
+        /// </summary>
+        private static void AddWatchingComponents(GameObject root)
+        {
+            if (root.GetComponent<PlayerSeat>() == null) root.AddComponent<PlayerSeat>();
+            if (root.GetComponent<SeatedPose>() == null) root.AddComponent<SeatedPose>();
+            if (root.GetComponent<MedievalZen.Cinematic.CinematicDirector>() == null) root.AddComponent<MedievalZen.Cinematic.CinematicDirector>();
         }
 
         /// <summary>

@@ -26,6 +26,10 @@ namespace MedievalZen.Tests
             LookSpeed = 1.75f,
             InvertY = true,
             ShowHud = false,
+            CinematicCamera = true,
+            CinematicWhenTravelling = false,
+            Letterbox = false,
+            HudAlways = true,
         };
 
         [Test]
@@ -120,6 +124,41 @@ namespace MedievalZen.Tests
             Assert.That(JourneySettings.TryFromJson(versionZero, new JourneySettings(), out JourneySettings b), Is.True);
             Assert.That(b.ShowHud, Is.False);
             Assert.That(b.FogAmount, Is.EqualTo(JourneySettings.AtmosphereMax), "migrated values are clamped");
+        }
+
+        [Test]
+        public void VersionOneBlobLoadsWithTheCinematicDefaults()
+        {
+            // A blob saved before the cinematic camera existed (version 1): every old field is read, the new ones default.
+            string v1 = "{\"version\":1,\"flow\":\"Fast\",\"weather\":\"Auto\",\"fog\":1,\"haze\":1,\"clouds\":1,\"wind\":false," +
+                        "\"windVolume\":0.06,\"camera\":\"FirstPerson\",\"lookSpeed\":1.5,\"invertY\":false,\"showHud\":true}";
+            Assert.That(JourneySettings.TryFromJson(v1, new JourneySettings(), out JourneySettings read), Is.True);
+            Assert.That(read.Flow, Is.EqualTo(FlowOfTime.Fast));
+            Assert.That(read.Camera, Is.EqualTo(CameraMode.FirstPerson));
+            Assert.That(read.LookSpeed, Is.EqualTo(1.5f));
+            Assert.That(read.CinematicCamera, Is.False);
+            Assert.That(read.CinematicWhenTravelling, Is.True);
+            Assert.That(read.Letterbox, Is.True);
+            Assert.That(read.HudAlways, Is.False);
+            StringAssert.StartsWith("{\"version\":2,", read.ToJson(), "re-stamped as version 2 on the next save");
+        }
+
+        [Test]
+        public void CinematicChoicesRoundTripAndCountForSameAs()
+        {
+            var a = new JourneySettings { CinematicCamera = true, CinematicWhenTravelling = false, Letterbox = false, HudAlways = true };
+            string json = a.ToJson();
+            StringAssert.Contains("\"cinematic\":true", json);
+            StringAssert.Contains("\"cinematicTravel\":false", json);
+            StringAssert.Contains("\"letterbox\":false", json);
+            StringAssert.Contains("\"hudAlways\":true", json);
+            Assert.That(JourneySettings.TryFromJson(json, new JourneySettings(), out JourneySettings read), Is.True);
+            Assert.That(read.SameAs(a), Is.True);
+            Assert.That(new JourneySettings().SameAs(a), Is.False);
+            var defaults = new JourneySettings();
+            Assert.That(defaults.CinematicCamera, Is.False, "the cinematic camera is opt-in as the camera choice");
+            Assert.That(defaults.CinematicWhenTravelling, Is.True, "auto-travel is filmed by default");
+            Assert.That(defaults.Letterbox, Is.True);
         }
 
         [Test]

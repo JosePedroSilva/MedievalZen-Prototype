@@ -90,6 +90,12 @@ namespace MedievalZen.Travel
         /// <summary>True while following a route.</summary>
         public bool IsActive => follower != null;
 
+        /// <summary>
+        /// While true an active trip is held where it is (the traveller sat down): the motor is not driven, the stuck detector
+        /// does not run, the route is kept. Cleared by <see cref="Begin(RoadRoute)"/> and <see cref="Cancel"/>.
+        /// </summary>
+        public bool Paused { get; set; }
+
         /// <summary>The route being followed, or <c>null</c>.</summary>
         public RoadRoute Route => follower?.Route;
 
@@ -104,6 +110,7 @@ namespace MedievalZen.Travel
             follower = new RouteFollower(route);
             follower.Reproject(transform.position);
             approaching = false;
+            Paused = false;
             phase = 0f;
             nextReprojectTime = 0f;
             ResetStuck();
@@ -120,6 +127,7 @@ namespace MedievalZen.Travel
 
             follower = new RouteFollower(route);
             approaching = true;
+            Paused = false;
             approachTarget = roadPoint;
             phase = 0f;
             nextReprojectTime = 0f;
@@ -149,6 +157,7 @@ namespace MedievalZen.Travel
             RoadRoute route = follower.Route;
             follower = null;
             approaching = false;
+            Paused = false;
             Cancelled?.Invoke(route);
         }
 
@@ -172,7 +181,7 @@ namespace MedievalZen.Travel
 
         private void Update()
         {
-            if (follower == null) return;
+            if (follower == null || Paused) return;
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
 

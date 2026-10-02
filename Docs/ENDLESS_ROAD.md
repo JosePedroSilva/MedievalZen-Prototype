@@ -143,6 +143,8 @@ subtracts it before anything reaches the scene.
   verifies every reference after saving), `Open Scene`, `Forget Saved Journey`, `Reset Safety Level`. The journey (seed,
   distance, day, hour) is saved in PlayerPrefs `MedievalZen.EndlessJourney`; a saved journey overrides the seed
   in the settings asset.
+- The tile builder registers seat props with `SeatIndex`; `EndlessWorld.TreeBlocksSight` / `InsideTree` answer the
+  cinematic camera from the instanced tree cells; inn door points face out of the door.
 - The generator is found by type name (`MedievalZen.Endless.Generation.EndlessGenerator`); a built-in stub is
   used if it is missing or `useStubGenerator` is ticked.
 

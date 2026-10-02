@@ -780,7 +780,10 @@ namespace MedievalZen.World
             }
         }
 
-        /// <summary>Puts an <see cref="MedievalZen.Travel.InnRest"/> point just outside the door side (+Z of the placement) of an inn cabin.</summary>
+        /// <summary>
+        /// Puts an <see cref="MedievalZen.Travel.InnRest"/> point just outside the door side (+Z of the placement) of an inn cabin,
+        /// its forward pointing out of the door.
+        /// </summary>
         public static GameObject PlaceInnDoor(GameObject prefab, PropPlacement prop, PrefabFamily family, Vector3 position, Quaternion rotation,
             Transform parent, Vector3 origin, string innName)
         {
@@ -794,6 +797,7 @@ namespace MedievalZen.World
             var go = new GameObject("InnDoor");
             go.transform.SetParent(parent, false);
             go.transform.localPosition = door - origin;
+            go.transform.localRotation = Quaternion.Euler(0f, prop.yaw, 0f);   // facing out of the door (the seated traveller's doorstep view)
             go.AddComponent<MedievalZen.Travel.InnRest>().Initialize(prop.settlementId, innName);
             return go;
         }

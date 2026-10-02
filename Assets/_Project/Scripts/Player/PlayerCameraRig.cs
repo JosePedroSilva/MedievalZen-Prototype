@@ -5,10 +5,27 @@ using UnityEngine.Rendering;
 namespace MedievalZen.Player
 {
     /// <summary>
+    /// Something that can take the camera over from the rig (the cinematic director). The rig stays the only owner of the
+    /// <see cref="Camera"/>: it asks the provider once per frame, inside its own <c>LateUpdate</c>, and blends between its
+    /// first/third-person pose and the provider's.
+    /// </summary>
+    public interface ICameraPoseProvider
+    {
+        /// <summary>
+        /// This frame's camera pose. Return false to keep the previous one (the rig holds the last pose it was given).
+        /// <paramref name="fieldOfView"/> is the vertical field of view in degrees.
+        /// </summary>
+        bool TryGetCameraPose(float deltaTime, out Vector3 position, out Quaternion rotation, out float fieldOfView);
+    }
+
+    /// <summary>
     /// Hand-rolled first/third-person camera on the player rig. Owns one child <see cref="Camera"/>
     /// (with its AudioListener) and positions it every <c>LateUpdate</c>. The look direction (yaw/pitch)
     /// is shared by both modes and independent of the body; toggling blends the camera position
     /// between the eye anchor and the over-the-shoulder orbit point.
+    /// Two narrow hooks extend it without changing either mode: an external pose provider
+    /// (<see cref="SetPoseProvider"/>, the cinematic camera) blended in and out over the normal pose, and an
+    /// <see cref="AnchorOffset"/> plus optional look limits (sitting down lowers the eyes and the orbit pivot).
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PlayerCameraRig : MonoBehaviour
@@ -106,6 +123,25 @@ namespace MedievalZen.Player
         private float framingBlendDuration = 0.5f;
         private float lookSensitivityScale = 1f;
 
+        // External pose (cinematic camera).
+        private ICameraPoseProvider poseProvider;
+        private bool externalActive;
+        private float externalWeight;          // linear 0..1, eased when applied
+        private float externalBlendSeconds = 1f;
+        private bool hasExternalPose;
+        private Vector3 externalPosition;
+        private Quaternion externalRotation = Quaternion.identity;
+        private float externalFov = 60f;
+        private float baseFieldOfView = 60f;
+        private float appliedFov = -1f;
+
+        // Look limits (seated, first person).
+        private bool lookLimited;
+        private float limitCentreYaw;
+        private float limitYawHalfRange = 180f;
+        private float limitMinPitch = -89f;
+        private float limitMaxPitch = 89f;
+
         /// <summary>Raised after <see cref="Mode"/> changes.</summary>
         public event Action<CameraMode> ModeChanged;
 
@@ -171,6 +207,17 @@ namespace MedievalZen.Player
             Vector2 degrees = (isPointerDelta ? input * mouseSensitivity : input * (stickSensitivity * Time.deltaTime)) * lookSensitivityScale;
             targetYaw += degrees.x;
             targetPitch = Mathf.Clamp(targetPitch + (invertY ? degrees.y : -degrees.y), minPitch, maxPitch);
+            ApplyLookLimits();
+        }
+
+        /// <summary>
+        /// Converts look input to degrees exactly as <see cref="AddLook"/> would (sensitivity, look speed and invert applied:
+        /// x = yaw right, y = pitch down), without moving the rig. The cinematic camera's manual orbit uses it.
+        /// </summary>
+        public Vector2 LookDegrees(Vector2 input, bool isPointerDelta)
+        {
+            Vector2 degrees = (isPointerDelta ? input * mouseSensitivity : input * (stickSensitivity * Time.deltaTime)) * lookSensitivityScale;
+            return new Vector2(degrees.x, invertY ? degrees.y : -degrees.y);
         }
 
         /// <summary>Points the camera along <paramref name="yawDegrees"/> immediately (e.g. after a teleport).</summary>
@@ -199,6 +246,87 @@ namespace MedievalZen.Player
             framingBlendDuration = Mathf.Max(0.01f, blendSeconds);
         }
 
+        // ------------------------------------------------------------------ external pose (cinematic camera)
+
+        /// <summary>
+        /// Hands the camera to <paramref name="provider"/>, blending from the current first/third-person pose to the provider's
+        /// over <paramref name="blendSeconds"/> (eased). First/third-person keep running underneath, unchanged.
+        /// </summary>
+        public void SetPoseProvider(ICameraPoseProvider provider, float blendSeconds)
+        {
+            if (provider == null) return;
+            if (!ReferenceEquals(provider, poseProvider)) hasExternalPose = false;
+            poseProvider = provider;
+            externalActive = true;
+            externalBlendSeconds = Mathf.Max(0.01f, blendSeconds);
+        }
+
+        /// <summary>
+        /// Gives the camera back from <paramref name="provider"/> (no-op for another provider), blending back over
+        /// <paramref name="blendSeconds"/>; the provider keeps being asked for its pose until the blend has finished.
+        /// </summary>
+        public void ReleasePoseProvider(ICameraPoseProvider provider, float blendSeconds)
+        {
+            if (!ReferenceEquals(provider, poseProvider)) return;
+            externalActive = false;
+            externalBlendSeconds = Mathf.Max(0.01f, blendSeconds);
+        }
+
+        /// <summary>True while a pose provider has (or is handing back) the camera.</summary>
+        public bool HasPoseProvider => poseProvider != null;
+
+        /// <summary>Eased share (0..1) of the external pose in the camera this frame.</summary>
+        public float ExternalWeight => Mathf.SmoothStep(0f, 1f, externalWeight);
+
+        /// <summary>The camera's vertical field of view outside the cinematic camera.</summary>
+        public float BaseFieldOfView => baseFieldOfView;
+
+        /// <summary>Points the look direction at <paramref name="yawDegrees"/> / <paramref name="pitchDegrees"/> immediately.</summary>
+        public void SnapLook(float yawDegrees, float pitchDegrees)
+        {
+            yaw = targetYaw = yawDegrees;
+            pitch = targetPitch = Mathf.Clamp(pitchDegrees, minPitch, maxPitch);
+        }
+
+        // ------------------------------------------------------------------ seated anchor and look limits
+
+        /// <summary>
+        /// World-space offset added to the first-person eye and the third-person pivot (zero = as designed). The seated traveller
+        /// lowers both; whoever sets it eases it in and out.
+        /// </summary>
+        public Vector3 AnchorOffset { get; set; }
+
+        /// <summary>The first-person eye position without <see cref="AnchorOffset"/>.</summary>
+        public Vector3 StandingEyePosition => eyeAnchor != null ? eyeAnchor.position : transform.position + Vector3.up * eyeHeight;
+
+        /// <summary>
+        /// Keeps the look within <paramref name="yawHalfRange"/> degrees of <paramref name="centreYaw"/> and between the pitches
+        /// (gentle: the target is pulled back in, the camera follows with the usual smoothing). Undo with <see cref="ClearLookLimits"/>.
+        /// </summary>
+        public void SetLookLimits(float centreYaw, float yawHalfRange, float minPitchDegrees, float maxPitchDegrees)
+        {
+            lookLimited = true;
+            limitCentreYaw = centreYaw;
+            limitYawHalfRange = Mathf.Clamp(yawHalfRange, 5f, 180f);
+            limitMinPitch = Mathf.Min(minPitchDegrees, maxPitchDegrees);
+            limitMaxPitch = Mathf.Max(minPitchDegrees, maxPitchDegrees);
+        }
+
+        /// <summary>Removes the look limits.</summary>
+        public void ClearLookLimits()
+        {
+            lookLimited = false;
+        }
+
+        private void ApplyLookLimits()
+        {
+            if (!lookLimited) return;
+            float delta = Mathf.DeltaAngle(limitCentreYaw, targetYaw);
+            float clamped = Mathf.Clamp(delta, -limitYawHalfRange, limitYawHalfRange);
+            targetYaw += clamped - delta;
+            targetPitch = Mathf.Clamp(targetPitch, Mathf.Max(minPitch, limitMinPitch), Mathf.Min(maxPitch, limitMaxPitch));
+        }
+
         /// <summary>Locks (hidden, centred) or frees the cursor.</summary>
         public void SetCursorLocked(bool locked)
         {
@@ -214,6 +342,10 @@ namespace MedievalZen.Player
             if (cameraTransform == null)
             {
                 Debug.LogError($"{nameof(PlayerCameraRig)} on '{name}' has no camera.", this);
+            }
+            else
+            {
+                baseFieldOfView = viewCamera.fieldOfView;
             }
 
             if (visualRoot != null)
@@ -255,6 +387,7 @@ namespace MedievalZen.Player
             if (cameraTransform == null) return;
             float dt = Time.deltaTime;
 
+            ApplyLookLimits();
             float k = lookSmoothing > 0f ? 1f - Mathf.Exp(-lookSmoothing * dt) : 1f;
             yaw += (targetYaw - yaw) * k;
             pitch += (targetPitch - pitch) * k;
@@ -272,16 +405,61 @@ namespace MedievalZen.Player
             framingWeight = Mathf.MoveTowards(framingWeight, framingActive ? 1f : 0f, dt / framingBlendDuration);
 
             Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
-            Vector3 firstPerson = eyeAnchor != null ? eyeAnchor.position : transform.position + Vector3.up * eyeHeight;
+            Vector3 firstPerson = StandingEyePosition + AnchorOffset;
             Vector3 thirdPerson = ThirdPersonPosition(rotation, dt);
+            Vector3 position = Vector3.LerpUnclamped(firstPerson, thirdPerson, eased);
+            float fieldOfView = baseFieldOfView;
 
-            cameraTransform.SetPositionAndRotation(Vector3.LerpUnclamped(firstPerson, thirdPerson, eased), rotation);
-            SetBodyHidden(eased < hideBodyBelowBlend);
+            // External pose (cinematic camera), blended over the normal one; asked once per frame while it has any share.
+            externalWeight = Mathf.MoveTowards(externalWeight, externalActive ? 1f : 0f, dt / externalBlendSeconds);
+            float external = 0f;
+            if (poseProvider != null)
+            {
+                if (poseProvider.TryGetCameraPose(dt, out Vector3 p, out Quaternion r, out float f))
+                {
+                    externalPosition = p;
+                    externalRotation = r;
+                    externalFov = f;
+                    hasExternalPose = true;
+                }
+
+                if (hasExternalPose)
+                {
+                    external = Mathf.SmoothStep(0f, 1f, externalWeight);
+                    position = Vector3.LerpUnclamped(position, externalPosition, external);
+                    rotation = Quaternion.Slerp(rotation, externalRotation, external);
+                    fieldOfView = Mathf.Lerp(baseFieldOfView, externalFov, external);
+                }
+
+                if (!externalActive && externalWeight <= 0f)
+                {
+                    poseProvider = null;
+                    hasExternalPose = false;
+                }
+            }
+
+            cameraTransform.SetPositionAndRotation(position, rotation);
+            if (poseProvider != null)
+            {
+                if (!Mathf.Approximately(appliedFov, fieldOfView)) viewCamera.fieldOfView = fieldOfView;
+                appliedFov = fieldOfView;
+            }
+            else if (appliedFov >= 0f)
+            {
+                viewCamera.fieldOfView = baseFieldOfView;   // handed back: restore the lens exactly
+                appliedFov = -1f;
+            }
+            else
+            {
+                baseFieldOfView = viewCamera.fieldOfView;   // not ours: follow whatever the camera is set to
+            }
+
+            SetBodyHidden(eased < hideBodyBelowBlend && external < 0.5f);
         }
 
         private Vector3 ThirdPersonPosition(Quaternion rotation, float dt)
         {
-            Vector3 pivotPosition = pivot != null ? pivot.position : transform.position + Vector3.up * pivotHeight;
+            Vector3 pivotPosition = (pivot != null ? pivot.position : transform.position + Vector3.up * pivotHeight) + AnchorOffset;
             Vector3 right = rotation * Vector3.right;
             Vector3 back = rotation * Vector3.back;
 

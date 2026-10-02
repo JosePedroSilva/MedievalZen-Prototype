@@ -215,6 +215,18 @@ namespace MedievalZen.Environment
         /// <summary>True while time stands still (<see cref="TimeScale"/> is 0).</summary>
         public bool IsPaused => timeScale <= 0f;
 
+        /// <summary>
+        /// Temporary multiplier on top of <see cref="TimeScale"/> (1 = none): the seated traveller holding Sprint lets time run
+        /// faster without touching the Journey menu's chosen flow. Not saved; clamped to 1..60.
+        /// </summary>
+        public float FastForward
+        {
+            get => fastForward;
+            set => fastForward = Mathf.Clamp(float.IsNaN(value) ? 1f : value, 1f, 60f);
+        }
+
+        private float fastForward = 1f;
+
         /// <summary>Jumps forward to <paramref name="hour"/> (the next day if it is earlier than now) and applies it at once.</summary>
         public void SetTime(float hour)
         {
@@ -278,7 +290,7 @@ namespace MedievalZen.Environment
 
         private void Update()
         {
-            clock.Advance(Time.deltaTime * timeScale);
+            clock.Advance(Time.deltaTime * timeScale * fastForward);
             Apply();
             int whole = (int)clock.Hour;
             if (whole != lastWholeHour)

@@ -7,7 +7,7 @@ namespace MedievalZen.Travel
     /// <summary>
     /// Finds the <see cref="Interactable"/> the player is standing at and facing, shows its prompt on the HUD, and uses it
     /// when <see cref="PlayerController.InteractRequested"/> fires. Stays quiet while an input overlay (map, signpost list)
-    /// is open or while <see cref="Busy"/> (e.g. resting at an inn).
+    /// is open, while <see cref="Busy"/> (e.g. resting at an inn) or while the traveller is sitting down (Interact stands them up).
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-30)]
@@ -22,6 +22,7 @@ namespace MedievalZen.Travel
         [SerializeField, Tooltip("Camera rig (for the facing test); found on this GameObject if empty.")]
         private PlayerCameraRig cameraRig;
 
+        private PlayerSeat seat;
         private Interactable focus;
         private bool promptShown;
 
@@ -45,6 +46,11 @@ namespace MedievalZen.Travel
             if (GetComponent<SignpostMenu>() == null) gameObject.AddComponent<SignpostMenu>();
         }
 
+        private void Start()
+        {
+            seat = GetComponent<PlayerSeat>();   // added by the PlayerController at Awake when the rig has none
+        }
+
         private void OnEnable()
         {
             if (controller != null) controller.InteractRequested += OnInteract;
@@ -58,7 +64,7 @@ namespace MedievalZen.Travel
 
         private void Update()
         {
-            bool blocked = Busy || (controller != null && controller.InputOverride != null);
+            bool blocked = Busy || (controller != null && controller.InputOverride != null) || (seat != null && seat.IsActive);
             SetFocus(blocked ? null : FindBest());
         }
 

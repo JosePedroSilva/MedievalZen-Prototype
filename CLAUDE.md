@@ -37,10 +37,15 @@ generator coordinates are absolute doubles; only the runtime's floating origin c
   Components that hold world positions across frames implement `IOriginShiftable`.
 - Manual input and auto-travel both drive `PlayerMotor`; do not add a second movement path.
 - Player-side scripts run in a fixed order via `[DefaultExecutionOrder]`: GameWorld −100, EndlessWorld −70, DayCycle −60, WeatherSystem −58,
-  AtmosphereController −55, PlayerController −50, HeldMap −45, JourneyMenu −44, AutoTraveller −40, PlayerInteractor −30, HudController 50,
-  PlayerMotor 100, PlayerAnimator 110 (observes the motor only, no root motion); a driver calls the motor once per frame in Update: `MoveFacing` (third person and auto-travel: facing and travel direction are one thing) or `Move` + `Face` (first person: strafing allowed). Overlays (held map,
+  AtmosphereController −55, PlayerController −50, HeldMap −45, JourneyMenu −44, PlayerSeat −42, AutoTraveller −40, CinematicDirector −35, PlayerInteractor −30, HudController 50,
+  PlayerMotor 100, PlayerAnimator 110 (observes the motor only, no root motion), SeatedPose 120 (bone blend after the Animator); a driver calls the motor once per frame in Update: `MoveFacing` (third person and auto-travel: facing and travel direction are one thing) or `Move` + `Face` (first person: strafing allowed). Overlays (held map,
   signpost list, Journey menu) take input through `PlayerController.InputOverride` (`IPlayerInputOverride`),
   never a second input path.
+- `PlayerCameraRig` is the only owner of the Camera. The cinematic camera takes the view only through
+  `SetPoseProvider`/`ReleasePoseProvider` (`ICameraPoseProvider`); sitting moves it only through `AnchorOffset` and
+  `SetLookLimits`. First- and third-person numbers are validated by the user: do not change them.
+- Seats are recognised by Synty prefab name (`SeatCatalog`), with no component per prop; the endless tile builder
+  registers placed props with `SeatIndex`.
 - Keep the "zen" pacing: slow speeds, smooth cameras, no pop-in near the road.
 
 ## Working in this repo

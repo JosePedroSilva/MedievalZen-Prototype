@@ -568,6 +568,7 @@ namespace MedievalZen.Endless
             }
 
             tile.Props.Add((prefab, go));
+            MedievalZen.Player.SeatIndex.Register(go, prefab);   // logs, stumps, crates, low rocks, fires: things to sit on
             if (prop.role == PropRole.Windmill) WorldBuilder.AnimateWindmill(go, palette);
             if (prop.settlementId < 0) return;
 

@@ -492,6 +492,69 @@ namespace MedievalZen.Endless
             return c;
         }
 
+        // ------------------------------------------------------------------ sight queries (cinematic camera)
+
+        /// <summary>
+        /// True when the sight line <paramref name="a"/>–<paramref name="b"/> passes through a near tree's trunk or the dense core
+        /// of its crown (<see cref="MedievalZen.Cinematic.CinematicMath.TreeBlocks"/>). Only cells whose bounds the segment's
+        /// box touches are visited; allocation-free.
+        /// </summary>
+        public bool SegmentBlocked(Vector3 a, Vector3 b)
+        {
+            if (!Enabled) return false;
+            Vector3 lo = Vector3.Min(a, b), hi = Vector3.Max(a, b);
+            foreach (TreeCellSet set in sets)
+            {
+                foreach (TreeCell cell in set.Cells)
+                {
+                    if (cell.Max.x < lo.x || cell.Min.x > hi.x || cell.Max.z < lo.z || cell.Min.z > hi.z || cell.Max.y < lo.y || cell.Min.y > hi.y) continue;
+                    for (int p = 0; p < prototypes.Count; p++)
+                    {
+                        Matrix4x4[] list = cell.ByPrototype[p];
+                        if (list == null) continue;
+                        float height = Index.HeightOf(p), crown = Index.RadiusOf(p), trunk = prototypes[p].ColliderRadius;
+                        for (int i = 0; i < list.Length; i++)
+                        {
+                            var position = new Vector3(list[i].m03, list[i].m13, list[i].m23);
+                            float scale = new Vector3(list[i].m00, list[i].m10, list[i].m20).magnitude;
+                            float reach = crown * scale;
+                            if (position.x + reach < lo.x || position.x - reach > hi.x || position.z + reach < lo.z || position.z - reach > hi.z) continue;
+                            if (MedievalZen.Cinematic.CinematicMath.TreeBlocks(a, b, position, height * scale, crown * scale, Mathf.Max(0.15f, trunk * scale))) return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>True when <paramref name="point"/> is within <paramref name="pad"/> metres of a near tree's trunk or inside its crown core.</summary>
+        public bool PointInside(Vector3 point, float pad)
+        {
+            if (!Enabled) return false;
+            foreach (TreeCellSet set in sets)
+            {
+                foreach (TreeCell cell in set.Cells)
+                {
+                    if (cell.SqrDistanceXZ(point.x, point.z) > pad * pad + 1f || point.y < cell.Min.y - pad || point.y > cell.Max.y + pad) continue;
+                    for (int p = 0; p < prototypes.Count; p++)
+                    {
+                        Matrix4x4[] list = cell.ByPrototype[p];
+                        if (list == null) continue;
+                        float height = Index.HeightOf(p), crown = Index.RadiusOf(p), trunk = prototypes[p].ColliderRadius;
+                        for (int i = 0; i < list.Length; i++)
+                        {
+                            var position = new Vector3(list[i].m03, list[i].m13, list[i].m23);
+                            float scale = new Vector3(list[i].m00, list[i].m10, list[i].m20).magnitude;
+                            if (MedievalZen.Cinematic.CinematicMath.InsideTree(point, pad, position, height * scale, crown * scale, Mathf.Max(0.15f, trunk * scale))) return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
         // ------------------------------------------------------------------ teardown
 
         /// <summary>Destroys the runtime material copies (scene end).</summary>

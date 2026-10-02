@@ -48,6 +48,10 @@ namespace MedievalZen.UI
         private readonly StringBuilder builder = new StringBuilder(256);
 
         private CanvasGroup hudGroup;
+        private CanvasGroup clockGroup;
+        private RectTransform letterboxTop;
+        private RectTransform letterboxBottom;
+        private float letterboxAmount;
         private Text timeText;
         private Text dayText;
         private CanvasGroup destinationGroup;
@@ -97,6 +101,30 @@ namespace MedievalZen.UI
         /// Contextual prompts, toasts, the choice list and fades still show.
         /// </summary>
         public bool ShowHud { get; set; } = true;
+
+        /// <summary>
+        /// True while the cinematic camera has the view: the always-on HUD fades out (toasts, prompts and fades still show)
+        /// unless <see cref="HudAlways"/>.
+        /// </summary>
+        public bool CinematicMode { get; set; }
+
+        /// <summary>True while the traveller sits: the always-on HUD fades out like <see cref="CinematicMode"/>.</summary>
+        public bool SeatedMode { get; set; }
+
+        /// <summary>Player preference (Journey menu → View, "Always"): keep the HUD even during cinematic shots and while seated.</summary>
+        public bool HudAlways { get; set; }
+
+        /// <summary>Shows the clock even while the rest of the HUD is hidden (time running fast while seated).</summary>
+        public bool ForceClock { get; set; }
+
+        /// <summary>Thin black bars top and bottom (the cinematic camera's letterbox), eased in and out.</summary>
+        public bool Letterbox { get; set; }
+
+        /// <summary>Share of the screen height each letterbox bar takes when fully in.</summary>
+        public const float LetterboxHeight = 0.085f;
+
+        /// <summary>True when the always-on HUD (clock, destination, chips) is meant to be visible now.</summary>
+        public bool HudVisible => !MapMode && ShowHud && (HudAlways || (!CinematicMode && !SeatedMode));
 
         /// <summary>The Journey menu built with this HUD.</summary>
         public JourneyMenu Journey { get; private set; }
@@ -257,7 +285,10 @@ namespace MedievalZen.UI
         {
             float dt = Time.unscaledDeltaTime;
             float step = dt / panelFadeSeconds;
-            hudGroup.alpha = Mathf.MoveTowards(hudGroup.alpha, MapMode || !ShowHud ? 0f : 1f, step);
+            bool hudVisible = HudVisible;
+            hudGroup.alpha = Mathf.MoveTowards(hudGroup.alpha, hudVisible ? 1f : 0f, step);
+            clockGroup.alpha = Mathf.MoveTowards(clockGroup.alpha, hudVisible || (ForceClock && !MapMode) ? 1f : 0f, step);
+            UpdateLetterbox(dt);
             promptGroup.alpha = Mathf.MoveTowards(promptGroup.alpha, promptVisible ? 1f : 0f, step);
             menuGroup.alpha = Mathf.MoveTowards(menuGroup.alpha, menuVisible ? 1f : 0f, step);
 
@@ -266,6 +297,23 @@ namespace MedievalZen.UI
             UpdateDestination();
             UpdateRoad();
             UpdateToast(dt);
+        }
+
+        private void UpdateLetterbox(float dt)
+        {
+            float target = Letterbox ? 1f : 0f;
+            if (Mathf.Approximately(letterboxAmount, target) && (target > 0f || !letterboxTop.gameObject.activeSelf)) return;
+            letterboxAmount = Mathf.MoveTowards(letterboxAmount, target, dt / 0.9f);
+            float eased = Mathf.SmoothStep(0f, 1f, letterboxAmount);
+            bool visible = eased > 0.001f;
+            if (letterboxTop.gameObject.activeSelf != visible)
+            {
+                letterboxTop.gameObject.SetActive(visible);
+                letterboxBottom.gameObject.SetActive(visible);
+            }
+
+            letterboxTop.anchorMin = new Vector2(0f, 1f - LetterboxHeight * eased);
+            letterboxBottom.anchorMax = new Vector2(1f, LetterboxHeight * eased);
         }
 
         private void UpdateClock()
@@ -443,6 +491,20 @@ namespace MedievalZen.UI
 
         // ------------------------------------------------------------------ layout
 
+        private static RectTransform CreateBar(string name, Transform parent, bool top)
+        {
+            RectTransform bar = UiKit.CreateRect(name, parent);
+            bar.anchorMin = top ? new Vector2(0f, 1f) : Vector2.zero;
+            bar.anchorMax = top ? Vector2.one : new Vector2(1f, 0f);
+            bar.offsetMin = Vector2.zero;
+            bar.offsetMax = Vector2.zero;
+            Image image = bar.gameObject.AddComponent<Image>();
+            image.color = new Color(0.01f, 0.01f, 0.012f, 1f);
+            image.raycastTarget = false;
+            bar.gameObject.SetActive(false);
+            return bar;
+        }
+
         private void Build()
         {
             Transform root = transform;
@@ -454,8 +516,13 @@ namespace MedievalZen.UI
             hudGroup.blocksRaycasts = false;
             hudGroup.interactable = false;
 
-            Image clock = UiKit.CreatePanel("Clock", hud, UiKit.Parchment);
+            // The clock has its own group (outside the HUD's) so it can stay up while time runs fast with the HUD hidden.
+            Image clock = UiKit.CreatePanel("Clock", root, UiKit.Parchment);
             UiKit.Place(clock.rectTransform, new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(170f, 62f));
+            clockGroup = clock.gameObject.AddComponent<CanvasGroup>();
+            clockGroup.blocksRaycasts = false;
+            clockGroup.interactable = false;
+            clock.transform.SetSiblingIndex(hud.GetSiblingIndex() + 1);
             timeText = UiKit.CreateText("Time", clock.transform, 28, TextAnchor.MiddleLeft, UiKit.Ink, FontStyle.Bold);
             UiKit.Place(timeText.rectTransform, new Vector2(0f, 0.5f), new Vector2(16f, 0f), new Vector2(90f, 40f));
             dayText = UiKit.CreateText("Day", clock.transform, 18, TextAnchor.MiddleRight, UiKit.FadedInk, FontStyle.Italic);
@@ -483,6 +550,10 @@ namespace MedievalZen.UI
             UiKit.Place(chips.rectTransform, new Vector2(1f, 1f), new Vector2(-24f, -76f), new Vector2(260f, 32f));
             chipsText = UiKit.CreateText("Text", chips.transform, 16, TextAnchor.MiddleCenter, UiKit.FadedInk);
             UiKit.Stretch(chipsText.rectTransform);
+
+            // Letterbox bars (cinematic camera): over the world and the HUD, under the prompt, menus, fade and toasts.
+            letterboxTop = CreateBar("LetterboxTop", root, true);
+            letterboxBottom = CreateBar("LetterboxBottom", root, false);
 
             // Bottom-centre prompt.
             Image prompt = UiKit.CreatePanel("Prompt", root, UiKit.Parchment);

@@ -9,6 +9,10 @@ namespace MedievalZen.Player
     /// Input glue for the player rig. Reads the <c>Player</c> map of an <see cref="InputActionAsset"/>
     /// (no generated wrapper) and drives the <see cref="PlayerMotor"/> and <see cref="PlayerCameraRig"/>
     /// in manual mode. Toggles auto-travel; any real movement input cancels it.
+    /// Sitting (<c>Crouch</c>: C / gamepad East) and the cinematic camera (<c>Cinematic</c>: B / d-pad up) are forwarded to
+    /// <see cref="PlayerSeat"/> and <see cref="MedievalZen.Cinematic.CinematicDirector"/>, which are added at runtime when the
+    /// rig has none. While the seat holds the body (walking to a seat, seated, getting up) this controller does not drive the
+    /// motor; Move input, the sit key, Interact or auto-travel stand the traveller up instead.
     /// </summary>
     [RequireComponent(typeof(PlayerMotor))]
     [DisallowMultipleComponent]
@@ -50,6 +54,10 @@ namespace MedievalZen.Player
         private InputAction mapAction;
         private InputAction interactAction;
         private InputAction pauseAction;
+        private InputAction sitAction;
+        private InputAction cinematicAction;
+        private PlayerSeat seat;
+        private MedievalZen.Cinematic.CinematicDirector director;
 
         /// <summary>Raised when the Map action is performed (Phase 3 opens the map UI).</summary>
         public event Action MapRequested;
@@ -59,6 +67,21 @@ namespace MedievalZen.Player
 
         /// <summary>Raised when the Pause action toggles the cursor lock (argument: true = paused / cursor free).</summary>
         public event Action<bool> PauseToggled;
+
+        /// <summary>Movement input this frame (raw, before overlays and dead zones).</summary>
+        public Vector2 MoveInput { get; private set; }
+
+        /// <summary>Look input this frame (raw: pointer pixels or stick deflection; zero while the cursor is free).</summary>
+        public Vector2 LookInput { get; private set; }
+
+        /// <summary>True when <see cref="LookInput"/> came from a pointer (pixels) rather than a stick.</summary>
+        public bool LookIsPointer { get; private set; }
+
+        /// <summary>True while the Sprint button is held (the seated traveller lets time run fast with it).</summary>
+        public bool SprintHeld => sprintAction != null && map != null && map.enabled && sprintAction.IsPressed();
+
+        /// <summary>Movement input magnitude above this cancels auto-travel (and stands the seated traveller up).</summary>
+        public float CancelThreshold => cancelTravelThreshold;
 
         /// <summary>
         /// Overlay that currently takes over part of the input (held map, signpost list), or null. Its hooks run before the
@@ -89,6 +112,16 @@ namespace MedievalZen.Player
             mapAction = actions.FindAction(MapName + "/Map", true);
             interactAction = actions.FindAction(MapName + "/Interact", true);
             pauseAction = actions.FindAction(MapName + "/Pause", true);
+            // Optional (older action assets may lack them): sitting uses the Crouch action, the cinematic camera its own.
+            sitAction = actions.FindAction(MapName + "/Crouch", false);
+            cinematicAction = actions.FindAction(MapName + "/Cinematic", false);
+
+            // Zero setup: both scenes get sitting and the cinematic camera without running a menu.
+            seat = GetComponent<PlayerSeat>();
+            if (seat == null) seat = gameObject.AddComponent<PlayerSeat>();
+            if (GetComponent<SeatedPose>() == null) gameObject.AddComponent<SeatedPose>();
+            director = GetComponent<MedievalZen.Cinematic.CinematicDirector>();
+            if (director == null) director = gameObject.AddComponent<MedievalZen.Cinematic.CinematicDirector>();
         }
 
         private void OnEnable()
@@ -99,6 +132,8 @@ namespace MedievalZen.Player
             mapAction.performed += OnMap;
             interactAction.performed += OnInteract;
             pauseAction.performed += OnPause;
+            if (sitAction != null) sitAction.performed += OnSit;
+            if (cinematicAction != null) cinematicAction.performed += OnCinematic;
             map.Enable();
         }
 
@@ -110,23 +145,39 @@ namespace MedievalZen.Player
             mapAction.performed -= OnMap;
             interactAction.performed -= OnInteract;
             pauseAction.performed -= OnPause;
+            if (sitAction != null) sitAction.performed -= OnSit;
+            if (cinematicAction != null) cinematicAction.performed -= OnCinematic;
             map.Disable();
+            MoveInput = Vector2.zero;
+            LookInput = Vector2.zero;
         }
 
         private void Update()
         {
             bool lookActive = cameraRig != null && cameraRig.CursorLocked;
+            LookInput = Vector2.zero;
             if (lookActive)
             {
                 InputControl control = lookAction.activeControl;
                 bool isPointer = control == null || control.device is Pointer;
                 Vector2 look = lookAction.ReadValue<Vector2>();
+                LookInput = look;
+                LookIsPointer = isPointer;
                 if (InputOverride == null || !InputOverride.OnLook(look, isPointer)) cameraRig.AddLook(look, isPointer);
             }
 
             Vector2 move = moveAction.ReadValue<Vector2>();
+            MoveInput = move;
             if (InputOverride != null && InputOverride.OnMove(move)) move = Vector2.zero;
             float magnitude = move.magnitude;
+
+            if (seat != null && seat.IsActive)
+            {
+                // Walking to a seat, seated or getting up: real movement input stands the traveller up (and, as everywhere,
+                // ends a trip that was paused); the seat drives the body until control comes back.
+                if (InputOverride == null && magnitude > cancelTravelThreshold) seat.StandUp(PlayerSeat.StandReason.Moved);
+                if (seat.HoldsBody) return;
+            }
 
             if (travel != null && travel.IsTravelling)
             {
@@ -168,9 +219,28 @@ namespace MedievalZen.Player
             if (cameraRig != null) cameraRig.Toggle();
         }
 
+        private void OnSit(InputAction.CallbackContext context)
+        {
+            if (InputOverride != null || seat == null) return;
+            seat.ToggleSit();
+        }
+
+        private void OnCinematic(InputAction.CallbackContext context)
+        {
+            if (InputOverride != null || director == null) return;
+            director.ToggleManual();
+        }
+
         private void OnAutoTravel(InputAction.CallbackContext context)
         {
             if (InputOverride != null && InputOverride.OnAutoTravel()) return;
+            if (seat != null && seat.IsActive)
+            {
+                // Seated: get up and walk on (a paused trip resumes; otherwise a new one starts once standing).
+                seat.StandUp(PlayerSeat.StandReason.Travel);
+                return;
+            }
+
             if (travel != null) travel.ToggleAutoTravel();
         }
 
@@ -183,6 +253,12 @@ namespace MedievalZen.Player
         private void OnInteract(InputAction.CallbackContext context)
         {
             if (InputOverride != null && InputOverride.OnInteract()) return;
+            if (seat != null && seat.IsActive)
+            {
+                seat.StandUp(PlayerSeat.StandReason.Key);
+                return;
+            }
+
             InteractRequested?.Invoke();
         }
 

@@ -29,8 +29,12 @@ namespace MedievalZen.UI
     /// </summary>
     public sealed class JourneySettings
     {
-        /// <summary>Version written by <see cref="ToJson"/>.</summary>
-        public const int CurrentVersion = 1;
+        /// <summary>
+        /// Version written by <see cref="ToJson"/>. 2 (2026-10-02) added the cinematic camera (<see cref="CinematicCamera"/>,
+        /// <see cref="CinematicWhenTravelling"/>, <see cref="Letterbox"/>) and <see cref="HudAlways"/>; a version-1 blob loads with
+        /// their defaults.
+        /// </summary>
+        public const int CurrentVersion = 2;
 
         /// <summary>Range of <see cref="FogAmount"/>, <see cref="HazeDistance"/> and <see cref="CloudSoftness"/>.</summary>
         public const float AtmosphereMax = 2f;
@@ -74,6 +78,18 @@ namespace MedievalZen.UI
         /// <summary>Show the clock, destination and mode chips.</summary>
         public bool ShowHud = true;
 
+        /// <summary>The camera choice "Cinematic": the cinematic camera takes over after a few idle seconds (<see cref="Camera"/> stays the mode it hands back to).</summary>
+        public bool CinematicCamera;
+
+        /// <summary>Film auto-travel with the cinematic camera after a few seconds without input (third person).</summary>
+        public bool CinematicWhenTravelling = true;
+
+        /// <summary>Thin black bars during cinematic shots.</summary>
+        public bool Letterbox = true;
+
+        /// <summary>Keep the clock and destination on screen even during cinematic shots and while seated ("Always").</summary>
+        public bool HudAlways;
+
         /// <summary>A copy of this object.</summary>
         public JourneySettings Clone() => (JourneySettings)MemberwiseClone();
 
@@ -98,13 +114,16 @@ namespace MedievalZen.UI
             return Flow == other.Flow && Weather == other.Weather && Near(FogAmount, other.FogAmount) &&
                    Near(HazeDistance, other.HazeDistance) && Near(CloudSoftness, other.CloudSoftness) &&
                    WindSound == other.WindSound && Near(WindVolume, other.WindVolume) && Camera == other.Camera &&
-                   Near(LookSpeed, other.LookSpeed) && InvertY == other.InvertY && ShowHud == other.ShowHud;
+                   Near(LookSpeed, other.LookSpeed) && InvertY == other.InvertY && ShowHud == other.ShowHud &&
+                   CinematicCamera == other.CinematicCamera && CinematicWhenTravelling == other.CinematicWhenTravelling &&
+                   Letterbox == other.Letterbox && HudAlways == other.HudAlways;
         }
 
         /// <summary>
         /// Serialises to one flat JSON object, e.g.
         /// <c>{"version":1,"flow":"Normal","weather":"Auto","fog":1,"haze":1,"clouds":1,"wind":false,"windVolume":0.06,
-        /// "camera":"ThirdPerson","lookSpeed":1,"invertY":false,"showHud":true}</c>. Enums are written by name so reordering
+        /// "camera":"ThirdPerson","lookSpeed":1,"invertY":false,"showHud":true,"cinematic":false,"cinematicTravel":true,
+        /// "letterbox":true,"hudAlways":false}</c>. Enums are written by name so reordering
         /// them never changes a saved choice.
         /// </summary>
         public string ToJson()
@@ -123,6 +142,10 @@ namespace MedievalZen.UI
             Append(sb, "lookSpeed", Number(LookSpeed), false);
             Append(sb, "invertY", InvertY ? "true" : "false", false);
             Append(sb, "showHud", ShowHud ? "true" : "false", false);
+            Append(sb, "cinematic", CinematicCamera ? "true" : "false", false);
+            Append(sb, "cinematicTravel", CinematicWhenTravelling ? "true" : "false", false);
+            Append(sb, "letterbox", Letterbox ? "true" : "false", false);
+            Append(sb, "hudAlways", HudAlways ? "true" : "false", false);
             sb.Append('}');
             return sb.ToString();
         }
@@ -155,6 +178,15 @@ namespace MedievalZen.UI
             if (TryNumber(values, "lookSpeed", out float look)) s.LookSpeed = look;
             if (TryBool(values, "invertY", out bool invert)) s.InvertY = invert;
             if (TryBool(values, "showHud", out bool hud)) s.ShowHud = hud;
+            if (version >= 2)
+            {
+                // Added in version 2; older blobs keep the defaults for these.
+                if (TryBool(values, "cinematic", out bool cinematic)) s.CinematicCamera = cinematic;
+                if (TryBool(values, "cinematicTravel", out bool cinematicTravel)) s.CinematicWhenTravelling = cinematicTravel;
+                if (TryBool(values, "letterbox", out bool bars)) s.Letterbox = bars;
+                if (TryBool(values, "hudAlways", out bool always)) s.HudAlways = always;
+            }
+
             s.Clamp();
             return true;
         }
