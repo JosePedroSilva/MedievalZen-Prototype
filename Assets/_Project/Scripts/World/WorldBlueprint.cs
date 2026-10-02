@@ -22,25 +22,28 @@ namespace MedievalZen.World
         /// <summary>Lake level in metres, or a negative value when the world has no lakes.</summary>
         public float WaterHeight = -1f;
 
-        /// <summary>Named natural landmarks: the tallest peak, then lakes (largest first).</summary>
+        /// <summary>Named landmarks: the tallest peak, then lakes (largest first), then the pass and the viewpoint when there is a pass road.</summary>
         public List<Landmark> Landmarks = new List<Landmark>();
 
-        /// <summary>Per-texel biome/land-cover fields on the alphamap grid.</summary>
+        /// <summary>The mountain inn and its pass roads (null when the mountain inn is disabled).</summary>
+        public PassRecord Pass;
+
+        /// <summary>Per-texel biome/land-cover fields on the land-cover grid (<see cref="WorldGenParams.CoverResolution"/>).</summary>
         public LandCover Cover;
 
         /// <summary>Terrain detail density maps, one per (family, variant); resolution = <see cref="DetailResolution"/>.</summary>
         public List<DetailLayer> DetailLayers = new List<DetailLayer>();
 
-        /// <summary>Detail cells per side (equals the alphamap resolution).</summary>
+        /// <summary>Detail cells per side (equals <see cref="WorldGenParams.CoverResolution"/>).</summary>
         public int DetailResolution;
 
         /// <summary>Background hills/mountains outside the playable area.</summary>
         public List<HorizonPlacement> Horizon = new List<HorizonPlacement>();
 
-        /// <summary>Splat weights <c>[z, x, layer]</c>; layers as in <see cref="TerrainShaper"/>.</summary>
+        /// <summary>Splat weights <c>[z, x, layer]</c> at <see cref="WorldGenParams.AlphamapResolution"/>; layers as in <see cref="TerrainShaper"/>.</summary>
         public float[,,] Splat;
 
-        /// <summary>Distance-to-road field on the alphamap grid.</summary>
+        /// <summary>Distance-to-road field on the land-cover grid.</summary>
         public RoadDistanceField RoadDistance;
 
         /// <summary>Road plan (grid, nodes, raw segments) the network was built from.</summary>
@@ -78,6 +81,7 @@ namespace MedievalZen.World
               .Append($"{Props.Count} props, {Fields.Count} fields, {DetailLayers.Count} detail layers, {Landmarks.Count} landmarks, ")
               .Append(WaterHeight > 0f ? $"water at {WaterHeight:0.0} m. " : "no lakes. ")
               .Append($"Generation {total:0} ms");
+            if (Pass != null) sb.Append("\n").Append(Pass.Summary());
             foreach (var (stage, ms) in StageTimings) sb.Append($"\n  {stage}: {ms:0} ms");
             return sb.ToString();
         }

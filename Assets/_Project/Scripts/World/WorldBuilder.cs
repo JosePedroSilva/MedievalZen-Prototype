@@ -12,7 +12,8 @@ namespace MedievalZen.World
     /// Turns a <see cref="WorldBlueprint"/> into Unity objects under the <see cref="GameWorld"/>: a Terrain (heights,
     /// splat layers, tree instances, detail density maps), the lake water plane, props in per-chunk parents,
     /// settlement markers, signposts and the horizon ring. In the editor (outside Play mode) prefabs are
-    /// instantiated as prefab instances and the TerrainData is saved as an asset.
+    /// instantiated as prefab instances and the TerrainData is created as an asset BEFORE it is painted (see
+    /// <see cref="TerrainDataWriter"/>), then saved and self-checked.
     /// </summary>
     public static class WorldBuilder
     {
@@ -20,7 +21,7 @@ namespace MedievalZen.World
         public const string GeneratedRootName = "Generated";
 
         /// <summary>Folder the TerrainData assets are saved to in the editor.</summary>
-        public const string TerrainDataFolder = "Assets/_Project/Generated";
+        public const string TerrainDataFolder = TerrainDataWriter.AssetFolder;
 
         /// <summary>Size of the prop chunk parents in metres.</summary>
         public const float PropChunkSize = 250f;
@@ -63,10 +64,21 @@ namespace MedievalZen.World
             root.localPosition = Vector3.zero;
             root.localRotation = Quaternion.identity;
 
+            // Persist-then-paint: in the editor the TerrainData asset is created on disk before anything is written into it
+            // (see TerrainDataWriter); heights, alphamaps, trees and details all go into the persistent object.
             Terrain terrain = null;
-            Stage("Terrain heights and layers", 0f, () => terrain = BuildTerrain(p, palette, blueprint, root));
-            Stage("Terrain trees", 0.25f, () => BuildTrees(terrain.terrainData, p, palette, blueprint));
-            Stage("Terrain details", 0.35f, () => BuildDetails(terrain.terrainData, palette, blueprint));
+            TerrainData data = null;
+            float[,,] painted = null;
+            Stage("Terrain heights and layers", 0f, () =>
+            {
+                data = TerrainDataWriter.Create($"Terrain_{p.seed}", p.heightmapResolution,
+                    new Vector3(p.worldSize, p.hillAmplitude, p.worldSize), TerrainAssetPath(p.seed));
+                TerrainDataWriter.WriteHeights(data, blueprint.Heightmap);
+                painted = TerrainDataWriter.WriteSplat(data, palette.terrainLayers, blueprint.Splat);
+                terrain = CreateTerrainObject(data, root);
+            });
+            Stage("Terrain trees", 0.25f, () => BuildTrees(data, p, palette, blueprint));
+            Stage("Terrain details", 0.35f, () => BuildDetails(data, palette, blueprint));
             Stage("Water and horizon", 0.5f, () =>
             {
                 BuildWater(p, palette, blueprint, root);
@@ -77,8 +89,12 @@ namespace MedievalZen.World
                 BuildSettlementMarkers(blueprint, root);
                 BuildSignposts(palette, blueprint, root);
             });
-            Stage("Props", 0.65f, () => BuildProps(palette, blueprint, root));
-            Stage("Save terrain", 0.95f, () => PersistTerrainData(terrain, p.seed));
+            Stage("Props", 0.65f, () => BuildProps(palette, blueprint, root, terrain));
+            Stage("Save and check terrain", 0.95f, () =>
+            {
+                terrain.Flush();
+                TerrainDataWriter.SaveAndCheck(data, painted, "Generate World");
+            });
 
             world.Terrain = terrain;
             if (settings != null) world.Settings = settings;
@@ -115,48 +131,26 @@ namespace MedievalZen.World
 
         // ------------------------------------------------------------------ terrain
 
-        private static Terrain BuildTerrain(WorldGenParams p, WorldPalette palette, WorldBlueprint bp, Transform root)
+        /// <summary>Where the editor saves the TerrainData for <paramref name="seed"/>; null in Play mode (kept in memory).</summary>
+        private static string TerrainAssetPath(int seed) => Application.isPlaying ? null : TerrainDataWriter.AssetPathFor(seed);
+
+        private static Terrain CreateTerrainObject(TerrainData data, Transform root)
         {
-            var data = new TerrainData { name = $"Terrain_{p.seed}" };
-            data.heightmapResolution = p.heightmapResolution;
-            data.size = new Vector3(p.worldSize, p.hillAmplitude, p.worldSize);
-            data.SetHeights(0, 0, bp.Heightmap);
-
-            int res = bp.Splat.GetLength(0);
-            data.alphamapResolution = res;
-            data.baseMapResolution = Mathf.Clamp(res, 16, 2048);
-            var layers = new List<TerrainLayer>();
-            var channelToLayer = new int[bp.Splat.GetLength(2)];
-            for (int c = 0; c < channelToLayer.Length; c++)
-            {
-                TerrainLayer layer = palette.terrainLayers != null && c < palette.terrainLayers.Length ? palette.terrainLayers[c] : null;
-                if (layer != null)
-                {
-                    channelToLayer[c] = layers.Count;
-                    layers.Add(layer);
-                }
-                else
-                {
-                    channelToLayer[c] = -1;
-                    Debug.LogWarning($"WorldPalette has no terrain layer for splat channel {c}; it is merged into the first layer.");
-                }
-            }
-
-            if (layers.Count == 0)
-            {
-                Debug.LogError("WorldPalette has no terrain layers; the terrain will be untextured.");
-            }
-            else
-            {
-                data.terrainLayers = layers.ToArray();
-                data.SetAlphamaps(0, 0, FoldSplat(bp.Splat, channelToLayer, layers.Count));
-            }
-
             GameObject go = Terrain.CreateTerrainGameObject(data);
             go.name = "Terrain";
             go.transform.SetParent(root, false);
             go.transform.localPosition = Vector3.zero;
             var terrain = go.GetComponent<Terrain>();
+            ApplyTerrainLook(terrain);
+            return terrain;
+        }
+
+        /// <summary>
+        /// The finite world's terrain look (draw instanced, pixel error, base map, detail and tree distances). Shared with the
+        /// endless road's near tiles so both modes look the same.
+        /// </summary>
+        public static void ApplyTerrainLook(Terrain terrain)
+        {
             terrain.drawInstanced = true;
             // Pixel error 1: coarser LOD patches otherwise render tens of centimetres below the true surface at mid
             // distance, while grass (placed on the true surface) floats above them.
@@ -168,42 +162,35 @@ namespace MedievalZen.World
             terrain.treeBillboardDistance = 300f;
             terrain.treeCrossFadeLength = 40f;
             terrain.treeMaximumFullLODCount = 300;
-            return terrain;
-        }
-
-        /// <summary>Maps splat channels onto the available layers (missing channels fold into layer 0), renormalised.</summary>
-        private static float[,,] FoldSplat(float[,,] splat, int[] channelToLayer, int layerCount)
-        {
-            bool identity = layerCount == channelToLayer.Length;
-            for (int c = 0; c < channelToLayer.Length && identity; c++) identity = channelToLayer[c] == c;
-            if (identity) return splat;
-
-            int h = splat.GetLength(0);
-            int w = splat.GetLength(1);
-            var result = new float[h, w, layerCount];
-            for (int z = 0; z < h; z++)
-            {
-                for (int x = 0; x < w; x++)
-                {
-                    for (int c = 0; c < channelToLayer.Length; c++)
-                    {
-                        int l = channelToLayer[c] >= 0 ? channelToLayer[c] : 0;
-                        result[z, x, l] += splat[z, x, c];
-                    }
-                }
-            }
-
-            return result;
         }
 
         private static void BuildTrees(TerrainData data, WorldGenParams p, WorldPalette palette, WorldBlueprint bp)
         {
-            var prototypes = new List<TreePrototype>();
+            var roles = new List<string>(bp.Trees.Count);
+            foreach (TreePlacement tree in bp.Trees) roles.Add(tree.role);
             var index = new Dictionary<string, int[]>();
+            data.treePrototypes = TreePrototypes(palette, roles, index);
+            var instances = new List<TreeInstance>(bp.Trees.Count);
+            float height = Mathf.Max(1e-3f, p.hillAmplitude);
             foreach (TreePlacement tree in bp.Trees)
             {
-                if (index.ContainsKey(tree.role)) continue;
-                List<GameObject> prefabs = WorldPalette.ValidPrefabs(palette.FindFamily(tree.role));
+                if (TryTreeInstance(tree, index, p.worldSize, height, out TreeInstance instance)) instances.Add(instance);
+            }
+
+            data.SetTreeInstances(instances.ToArray(), true);
+        }
+
+        /// <summary>
+        /// Tree prototypes for <paramref name="roles"/> (in order of first appearance, each family's valid prefabs in palette
+        /// order); fills <paramref name="index"/> with family to prototype index per variant.
+        /// </summary>
+        public static TreePrototype[] TreePrototypes(WorldPalette palette, IEnumerable<string> roles, Dictionary<string, int[]> index)
+        {
+            var prototypes = new List<TreePrototype>();
+            foreach (string role in roles)
+            {
+                if (role == null || index.ContainsKey(role)) continue;
+                List<GameObject> prefabs = WorldPalette.ValidPrefabs(palette.FindFamily(role));
                 var map = new int[prefabs.Count];
                 for (int v = 0; v < prefabs.Count; v++)
                 {
@@ -211,32 +198,38 @@ namespace MedievalZen.World
                     prototypes.Add(new TreePrototype { prefab = prefabs[v], bendFactor = 0f });
                 }
 
-                index[tree.role] = map;
+                index[role] = map;
             }
 
-            data.treePrototypes = prototypes.ToArray();
-            var instances = new List<TreeInstance>(bp.Trees.Count);
-            float height = Mathf.Max(1e-3f, p.hillAmplitude);
-            foreach (TreePlacement tree in bp.Trees)
-            {
-                int[] map = index[tree.role];
-                if (map.Length == 0) continue;
-                instances.Add(new TreeInstance
-                {
-                    prototypeIndex = map[((tree.variant % map.Length) + map.Length) % map.Length],
-                    position = new Vector3(tree.position.x / p.worldSize, tree.position.y / height, tree.position.z / p.worldSize),
-                    rotation = tree.yaw * Mathf.Deg2Rad,
-                    widthScale = tree.scale,
-                    heightScale = tree.scale,
-                    color = Color.white,
-                    lightmapColor = Color.white,
-                });
-            }
-
-            data.SetTreeInstances(instances.ToArray(), true);
+            return prototypes.ToArray();
         }
 
-        private static void BuildDetails(TerrainData data, WorldPalette palette, WorldBlueprint bp)
+        /// <summary>
+        /// The terrain tree instance for <paramref name="tree"/> (position relative to the terrain's corner) on a terrain
+        /// <paramref name="size"/> metres square and <paramref name="height"/> metres high; false when its family has no prefab.
+        /// </summary>
+        public static bool TryTreeInstance(TreePlacement tree, Dictionary<string, int[]> index, float size, float height, out TreeInstance instance)
+        {
+            instance = default;
+            if (tree.role == null || !index.TryGetValue(tree.role, out int[] map) || map.Length == 0) return false;
+            instance = new TreeInstance
+            {
+                prototypeIndex = map[((tree.variant % map.Length) + map.Length) % map.Length],
+                position = new Vector3(tree.position.x / size, tree.position.y / height, tree.position.z / size),
+                rotation = tree.yaw * Mathf.Deg2Rad,
+                widthScale = tree.scale,
+                heightScale = tree.scale,
+                color = Color.white,
+                lightmapColor = Color.white,
+            };
+            return true;
+        }
+
+        /// <summary>
+        /// Writes the detail (grass, flowers) prototypes and density maps of <paramref name="bp"/> into <paramref name="data"/>,
+        /// replacing any previous ones. Also used by MedievalZen/Repaint Terrain so grass follows the new paint.
+        /// </summary>
+        public static void BuildDetails(TerrainData data, WorldPalette palette, WorldBlueprint bp)
         {
             int res = bp.DetailResolution;
             if (res <= 0 || bp.DetailLayers.Count == 0) return;
@@ -246,44 +239,7 @@ namespace MedievalZen.World
             var sources = new List<DetailLayer>();
             foreach (DetailLayer layer in bp.DetailLayers)
             {
-                PrefabFamily family = palette.FindDetail(layer.family);
-                List<GameObject> prefabs = WorldPalette.ValidPrefabs(family);
-                if (prefabs.Count == 0) continue;
-                GameObject prefab = prefabs[layer.variant % prefabs.Count];
-
-                // Scale every family into its target height (DetailPlanner.TargetHeight) from the mesh's native
-                // size: recorded by the palette menu, else measured here (older palettes).
-                Vector2 native = family.NativeSize(prefab);
-                if (native.x <= 0f)
-                {
-                    Bounds b = LocalBounds(prefab);
-                    native = new Vector2(Mathf.Max(0.01f, b.max.y), Mathf.Max(b.size.x, b.size.z));
-                }
-
-                var (minWidth, maxWidth, minHeight, maxHeight) = DetailPlanner.PrototypeScale(layer.family, native.x, native.y);
-                var prototype = new DetailPrototype
-                {
-                    prototype = prefab,
-                    usePrototypeMesh = true,
-                    renderMode = DetailRenderMode.VertexLit,
-                    useInstancing = true,
-                    minWidth = minWidth,
-                    maxWidth = maxWidth,
-                    minHeight = minHeight,
-                    maxHeight = maxHeight,
-                    noiseSpread = 0.4f,
-                    healthyColor = Color.white,
-                    dryColor = new Color(0.92f, 0.9f, 0.78f),
-                    alignToGround = 0.6f,
-                    positionJitter = 1f,
-                };
-
-                if (!prototype.Validate(out string error))
-                {
-                    Debug.LogWarning($"Detail prototype {prefab.name} ({layer.family}) is invalid: {error}. Run MedievalZen/Create Default World Palette to rebuild the single-mesh detail prefabs.", prefab);
-                    continue;
-                }
-
+                if (!TryDetailPrototype(palette, layer.family, layer.variant, out DetailPrototype prototype)) continue;
                 prototypes.Add(prototype);
                 sources.Add(layer);
             }
@@ -296,46 +252,77 @@ namespace MedievalZen.World
             var buffer = new int[res, res];
             for (int l = 0; l < sources.Count; l++)
             {
-                byte[] density = sources[l].density;
-                for (int z = 0; z < res; z++)
-                {
-                    int sz = Mathf.Min(src - 1, z * src / res);
-                    for (int x = 0; x < res; x++)
-                    {
-                        buffer[z, x] = density[sz * src + Mathf.Min(src - 1, x * src / res)];
-                    }
-                }
-
+                ResampleDetail(sources[l].density, src, buffer);
                 data.SetDetailLayer(0, 0, l, buffer);
             }
         }
 
-        private static void PersistTerrainData(Terrain terrain, int seed)
+        /// <summary>The detail resolution actually used for a blueprint resolution (a multiple of <see cref="DetailResolutionPerPatch"/>).</summary>
+        public static int DetailResolutionFor(int blueprintResolution) =>
+            Mathf.Max(DetailResolutionPerPatch, blueprintResolution / DetailResolutionPerPatch * DetailResolutionPerPatch);
+
+        /// <summary>
+        /// The detail prototype for one variant of a detail family, scaled into its target height from the mesh's native size;
+        /// false (with a warning) when the family has no prefab or the prototype is invalid.
+        /// </summary>
+        public static bool TryDetailPrototype(WorldPalette palette, string familyId, int variant, out DetailPrototype prototype)
         {
-#if UNITY_EDITOR
-            if (Application.isPlaying || terrain == null) return;
-            TerrainData data = terrain.terrainData;
-            EnsureFolder(TerrainDataFolder);
-            string path = $"{TerrainDataFolder}/Terrain_{seed}.asset";
-            if (UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainData>(path) != null) UnityEditor.AssetDatabase.DeleteAsset(path);
-            UnityEditor.AssetDatabase.CreateAsset(data, path);
-            UnityEditor.AssetDatabase.SaveAssets();
-            terrain.terrainData = data;
-            var collider = terrain.GetComponent<TerrainCollider>();
-            if (collider != null) collider.terrainData = data;
-#endif
+            prototype = null;
+            PrefabFamily family = palette.FindDetail(familyId);
+            List<GameObject> prefabs = WorldPalette.ValidPrefabs(family);
+            if (prefabs.Count == 0) return false;
+            GameObject prefab = prefabs[variant % prefabs.Count];
+
+            // Scale every family into its target height (DetailPlanner.TargetHeight) from the mesh's native
+            // size: recorded by the palette menu, else measured here (older palettes).
+            Vector2 native = family.NativeSize(prefab);
+            if (native.x <= 0f)
+            {
+                Bounds b = LocalBounds(prefab);
+                native = new Vector2(Mathf.Max(0.01f, b.max.y), Mathf.Max(b.size.x, b.size.z));
+            }
+
+            var (minWidth, maxWidth, minHeight, maxHeight) = DetailPlanner.PrototypeScale(familyId, native.x, native.y);
+            var candidate = new DetailPrototype
+            {
+                prototype = prefab,
+                usePrototypeMesh = true,
+                renderMode = DetailRenderMode.VertexLit,
+                useInstancing = true,
+                minWidth = minWidth,
+                maxWidth = maxWidth,
+                minHeight = minHeight,
+                maxHeight = maxHeight,
+                noiseSpread = 0.4f,
+                healthyColor = Color.white,
+                dryColor = new Color(0.92f, 0.9f, 0.78f),
+                alignToGround = 0.6f,
+                positionJitter = 1f,
+            };
+
+            if (!candidate.Validate(out string error))
+            {
+                Debug.LogWarning($"Detail prototype {prefab.name} ({familyId}) is invalid: {error}. Run MedievalZen/Create Default World Palette to rebuild the single-mesh detail prefabs.", prefab);
+                return false;
+            }
+
+            prototype = candidate;
+            return true;
         }
 
-#if UNITY_EDITOR
-        private static void EnsureFolder(string path)
+        /// <summary>Nearest-neighbour resample of a <paramref name="src"/>-square density map into <paramref name="buffer"/> (<c>[z, x]</c>, square).</summary>
+        public static void ResampleDetail(byte[] density, int src, int[,] buffer)
         {
-            if (UnityEditor.AssetDatabase.IsValidFolder(path)) return;
-            int slash = path.LastIndexOf('/');
-            string parent = path.Substring(0, slash);
-            EnsureFolder(parent);
-            UnityEditor.AssetDatabase.CreateFolder(parent, path.Substring(slash + 1));
+            int res = buffer.GetLength(0);
+            for (int z = 0; z < res; z++)
+            {
+                int sz = Mathf.Min(src - 1, z * src / res);
+                for (int x = 0; x < res; x++)
+                {
+                    buffer[z, x] = density[sz * src + Mathf.Min(src - 1, x * src / res)];
+                }
+            }
         }
-#endif
 
         // ------------------------------------------------------------------ water and horizon
 
@@ -355,13 +342,21 @@ namespace MedievalZen.World
                 foreach (Renderer renderer in water.GetComponentsInChildren<Renderer>()) renderer.sharedMaterial = palette.waterMaterial;
             }
 
-            Bounds local = LocalBounds(palette.waterPlane);
-            float cover = p.worldSize * 1.02f;
+            FitWaterPlane(water, palette.waterPlane, p.worldSize * 0.5f, p.worldSize * 0.5f, p.worldSize * 1.02f, bp.WaterHeight);
+            foreach (Collider collider in water.GetComponentsInChildren<Collider>()) collider.enabled = false;
+        }
+
+        /// <summary>
+        /// Scales and places a water plane instance of <paramref name="prefab"/> so it covers a <paramref name="cover"/> metre
+        /// square centred on local (<paramref name="centreX"/>, <paramref name="centreZ"/>) at <paramref name="height"/>.
+        /// </summary>
+        public static void FitWaterPlane(GameObject water, GameObject prefab, float centreX, float centreZ, float cover, float height)
+        {
+            Bounds local = LocalBounds(prefab);
             Vector3 scale = new Vector3(cover / Mathf.Max(0.01f, local.size.x), 1f, cover / Mathf.Max(0.01f, local.size.z));
             water.transform.localScale = scale;
             water.transform.localRotation = Quaternion.identity;
-            water.transform.localPosition = new Vector3(p.worldSize * 0.5f - local.center.x * scale.x, bp.WaterHeight, p.worldSize * 0.5f - local.center.z * scale.z);
-            foreach (Collider collider in water.GetComponentsInChildren<Collider>()) collider.enabled = false;
+            water.transform.localPosition = new Vector3(centreX - local.center.x * scale.x, height, centreZ - local.center.z * scale.z);
         }
 
         private static void BuildHorizon(WorldGenParams p, WorldPalette palette, WorldBlueprint bp, Transform root)
@@ -510,13 +505,14 @@ namespace MedievalZen.World
 
         // ------------------------------------------------------------------ props
 
-        private static void BuildProps(WorldPalette palette, WorldBlueprint bp, Transform root)
+        private static void BuildProps(WorldPalette palette, WorldBlueprint bp, Transform root, Terrain terrain)
         {
             Transform propsRoot = new GameObject("Props").transform;
             propsRoot.SetParent(root, false);
             Transform settlementsRoot = GetOrCreate(root, "Settlements");
             var chunks = new Dictionary<long, Transform>();
             var missing = new HashSet<string>();
+            var safety = new Dictionary<string, int[]>();
             int placed = 0;
 
             foreach (PropPlacement prop in bp.Props)
@@ -551,17 +547,17 @@ namespace MedievalZen.World
 
                 GameObject go = Spawn(prefab, parent);
                 PrefabFamily family = palette.FindFamily(prop.role);
-                Quaternion rotation = Quaternion.Euler(0f, prop.yaw + (family?.yawOffset ?? 0f), 0f);
-                Vector3 position = prop.position;
-                if (family != null && family.centerPivot)
-                {
-                    Bounds local = LocalBounds(prefab);
-                    position -= rotation * new Vector3(local.center.x, 0f, local.center.z) * prop.scale;
-                }
+                bool measured = PropPose(palette, prop, prefab, out Vector3 position, out Quaternion rotation);
 
                 go.transform.localPosition = position - origin;
                 go.transform.localRotation = rotation;
                 go.transform.localScale = Vector3.one * prop.scale;
+                if (measured && terrain != null && !SafetyNet(go, prop.role, at => terrain.SampleHeight(at) + terrain.GetPosition().y, WorldBounds, safety))
+                {
+                    DestroyObject(go);
+                    continue;
+                }
+
                 if (prop.role == PropRole.Windmill) AnimateWindmill(go, palette);
                 if (prop.role == PropRole.Cabin && prop.settlementId >= 0 && prop.settlementId < bp.Settlements.Count &&
                     bp.Settlements[prop.settlementId].Type == SettlementType.Inn)
@@ -573,9 +569,137 @@ namespace MedievalZen.World
             }
 
             foreach (string role in missing) Debug.LogWarning($"WorldPalette has no prefabs for family '{role}'; those placements were skipped.");
+            if (safety.Count > 0)
+            {
+                var line = new System.Text.StringBuilder("Rock safety net (placed / sunk / shrunk / removed):");
+                var families = new List<string>(safety.Keys);
+                families.Sort(StringComparer.Ordinal);
+                foreach (string f in families)
+                {
+                    int[] c = safety[f];
+                    line.Append($" {f} {c[0]}/{c[1]}/{c[2]}/{c[3]};");
+                }
+
+                Debug.Log(line.ToString());
+            }
         }
 
-        private static void AnimateWindmill(GameObject windmill, WorldPalette palette)
+        /// <summary>
+        /// Where and how a prop placement is instanced (position in the placement's own space, before any parent offset):
+        /// rotation <c>Quaternion.Euler(pitch, yaw + yawOffset, roll)</c>; families with a centre pivot are shifted so their
+        /// mesh centre lands on the placement point. Rock-like pieces (returns true) were seated by <see cref="RockPlacer"/> on
+        /// the pivot with their own yaw / pitch / roll and get no offsets.
+        /// </summary>
+        public static bool PropPose(WorldPalette palette, PropPlacement prop, GameObject prefab, out Vector3 position, out Quaternion rotation)
+        {
+            PrefabFamily family = palette.FindFamily(prop.role);
+            bool measured = IsMeasured(prop.role);
+            float yawOffset = measured ? 0f : family?.yawOffset ?? 0f;
+            rotation = Quaternion.Euler(prop.pitch, prop.yaw + yawOffset, prop.roll);
+            position = prop.position;
+            if (!measured && family != null && family.centerPivot)
+            {
+                Bounds local = LocalBounds(prefab);
+                position -= rotation * new Vector3(local.center.x, 0f, local.center.z) * prop.scale;
+            }
+
+            return measured;
+        }
+
+        /// <summary>Families seated by <see cref="RockPlacer"/> and checked by the safety net.</summary>
+        public static bool IsMeasured(string role) => PropRole.IsRock(role) || role == PropRole.StoneStack || role == PropRole.StonePile;
+
+        /// <summary>World-space bounds of an instance (see <see cref="SafetyNet"/>); false when there are none.</summary>
+        public delegate bool BoundsOf(GameObject go, out Bounds bounds);
+
+        /// <summary>
+        /// Build-time guarantee for a rock-like piece, from its real renderer bounds: if its lowest point is not below the lowest
+        /// terrain under its footprint (5 x 5 samples) it is sunk until it is (0.3 m margin); a cliff whose top stands more than
+        /// 45 % of its height + 1 m above the highest ground under it is shrunk (x0.8, twice at most) and removed if it still looms;
+        /// anything taller than <see cref="RockPlacer.MaxHeight"/> + 0.5 m is removed. Counts per family into
+        /// <paramref name="counts"/> (placed, sunk, shrunk, removed). Returns false when the piece must be removed.
+        /// </summary>
+        public static bool SafetyNet(GameObject go, string role, Func<Vector3, float> groundAt, BoundsOf boundsOf, Dictionary<string, int[]> counts)
+        {
+            if (!counts.TryGetValue(role, out int[] c)) counts[role] = c = new int[4];
+            bool cliff = PropRole.IsCliff(role);
+            bool sunk = false, shrunk = false;
+            for (int pass = 0; pass < 4; pass++)
+            {
+                if (!boundsOf(go, out Bounds b)) break;
+                if (b.size.y > RockPlacer.MaxHeight + 0.5f)
+                {
+                    c[3]++;
+                    return false;
+                }
+
+                float gMin = float.PositiveInfinity, gMax = float.NegativeInfinity;
+                for (int j = 0; j < 5; j++)
+                {
+                    for (int i = 0; i < 5; i++)
+                    {
+                        var at = new Vector3(Mathf.Lerp(b.min.x, b.max.x, i / 4f), 0f, Mathf.Lerp(b.min.z, b.max.z, j / 4f));
+                        float g = groundAt(at);
+                        gMin = Mathf.Min(gMin, g);
+                        gMax = Mathf.Max(gMax, g);
+                    }
+                }
+
+                if (b.min.y > gMin - 0.05f)
+                {
+                    go.transform.position -= Vector3.up * (b.min.y - gMin + 0.3f);
+                    sunk = true;
+                    continue;
+                }
+
+                if (cliff && b.max.y - gMax > 0.45f * b.size.y + 1f)
+                {
+                    if (pass >= 3)
+                    {
+                        c[3]++;
+                        return false;
+                    }
+
+                    // Shrink about the bottom centre (keeps it seated), then check again.
+                    Vector3 pivotToBase = new Vector3(b.center.x, b.min.y, b.center.z) - go.transform.position;
+                    go.transform.localScale *= 0.8f;
+                    go.transform.position += pivotToBase * 0.2f;
+                    shrunk = true;
+                    continue;
+                }
+
+                break;
+            }
+
+            c[0]++;
+            if (sunk) c[1]++;
+            if (shrunk) c[2]++;
+            return true;
+        }
+
+        /// <summary>World bounds of every renderer under <paramref name="go"/>.</summary>
+        public static bool WorldBounds(GameObject go, out Bounds bounds)
+        {
+            bounds = default;
+            bool any = false;
+            foreach (Renderer renderer in go.GetComponentsInChildren<Renderer>())
+            {
+                if (!any)
+                {
+                    bounds = renderer.bounds;
+                    any = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            return any;
+        }
+
+        /// <summary>Spins the blades of a windmill instance with the palette's rotate controller.</summary>
+        public static void AnimateWindmill(GameObject windmill, WorldPalette palette)
         {
             foreach (Transform child in windmill.GetComponentsInChildren<Transform>(true))
             {
@@ -597,12 +721,22 @@ namespace MedievalZen.World
             Transform settlementsRoot = GetOrCreate(root, "Settlements");
             foreach (Settlement settlement in bp.Roads.Settlements)
             {
-                Transform t = GetOrCreate(settlementsRoot, settlement.Name);
-                t.localPosition = settlement.Position;
-                var marker = t.gameObject.GetComponent<SettlementMarker>();
-                if (marker == null) marker = t.gameObject.AddComponent<SettlementMarker>();
-                marker.Initialize(settlement.Id, settlement.Name, settlement.Type, settlement.Radius);
+                PlaceSettlementMarker(settlementsRoot, settlement.Id, settlement.Name, settlement.Type, settlement.Radius, settlement.Position);
             }
+        }
+
+        /// <summary>
+        /// The child of <paramref name="parent"/> named <paramref name="displayName"/> (created if missing) at local
+        /// <paramref name="localPosition"/>, with an initialised <see cref="SettlementMarker"/> (trigger sphere).
+        /// </summary>
+        public static SettlementMarker PlaceSettlementMarker(Transform parent, int id, string displayName, SettlementType type, float radius, Vector3 localPosition)
+        {
+            Transform t = GetOrCreate(parent, displayName);
+            t.localPosition = localPosition;
+            var marker = t.gameObject.GetComponent<SettlementMarker>();
+            if (marker == null) marker = t.gameObject.AddComponent<SettlementMarker>();
+            marker.Initialize(id, displayName, type, radius);
+            return marker;
         }
 
         private static void BuildSignposts(WorldPalette palette, WorldBlueprint bp, Transform root)
@@ -647,7 +781,7 @@ namespace MedievalZen.World
         }
 
         /// <summary>Puts an <see cref="MedievalZen.Travel.InnRest"/> point just outside the door side (+Z of the placement) of an inn cabin.</summary>
-        private static void PlaceInnDoor(GameObject prefab, PropPlacement prop, PrefabFamily family, Vector3 position, Quaternion rotation,
+        public static GameObject PlaceInnDoor(GameObject prefab, PropPlacement prop, PrefabFamily family, Vector3 position, Quaternion rotation,
             Transform parent, Vector3 origin, string innName)
         {
             Bounds local = LocalBounds(prefab);
@@ -661,6 +795,7 @@ namespace MedievalZen.World
             go.transform.SetParent(parent, false);
             go.transform.localPosition = door - origin;
             go.AddComponent<MedievalZen.Travel.InnRest>().Initialize(prop.settlementId, innName);
+            return go;
         }
 
         // ------------------------------------------------------------------ helpers
@@ -710,7 +845,8 @@ namespace MedievalZen.World
             return t;
         }
 
-        private static GameObject Spawn(GameObject prefab, Transform parent)
+        /// <summary>Instantiates <paramref name="prefab"/> under <paramref name="parent"/> (as a prefab instance in the editor outside Play mode).</summary>
+        public static GameObject Spawn(GameObject prefab, Transform parent)
         {
 #if UNITY_EDITOR
             if (!Application.isPlaying)

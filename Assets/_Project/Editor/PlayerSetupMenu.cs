@@ -1,3 +1,4 @@
+using System.Text;
 using MedievalZen.Player;
 using MedievalZen.Roads;
 using MedievalZen.Travel;
@@ -145,6 +146,11 @@ namespace MedievalZen.EditorTools
                     Debug.LogError($"Could not assign {InputActionsPath} to PlayerController.actions.");
                 }
 
+                if (!AddAnimation(root))
+                {
+                    Debug.LogWarning("PlayerRig saved without animation (see the errors above); run MedievalZen/Player/Upgrade Player Rig (Add Animation) once fixed.");
+                }
+
                 EnsureFolder(PrefabPath.Substring(0, PrefabPath.LastIndexOf('/')));
                 GameObject saved = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath, out bool success);
                 if (!success)
@@ -160,6 +166,139 @@ namespace MedievalZen.EditorTools
             {
                 Object.DestroyImmediate(root);
             }
+        }
+
+        [MenuItem("MedievalZen/Player/Upgrade Player Rig (Add Animation)")]
+        private static void UpgradePlayerRigMenu()
+        {
+            if (UpgradePlayerRigPrefab())
+            {
+                GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+                Selection.activeObject = prefab;
+                EditorGUIUtility.PingObject(prefab);
+            }
+        }
+
+        [MenuItem("MedievalZen/Player/Upgrade Player Rig (Add Animation)", true)]
+        private static bool ValidateUpgrade() => !EditorApplication.isPlayingOrWillChangePlaymode;
+
+        /// <summary>
+        /// Adds (or refreshes) the animation setup on the existing <see cref="PrefabPath"/> in place, so scene instances
+        /// (Demo, PlayerTest) pick it up without regenerating anything. Creates the prefab if it does not exist. Idempotent.
+        /// </summary>
+        public static bool UpgradePlayerRigPrefab()
+        {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) == null)
+            {
+                return CreatePlayerRigPrefab() != null;
+            }
+
+            GameObject contents = PrefabUtility.LoadPrefabContents(PrefabPath);
+            try
+            {
+                if (!AddAnimation(contents)) return false;
+                PrefabUtility.SaveAsPrefabAsset(contents, PrefabPath, out bool success);
+                if (!success)
+                {
+                    Debug.LogError($"Failed to save {PrefabPath}.");
+                    return false;
+                }
+
+                Debug.Log($"Upgraded {PrefabPath}: Animator (PlayerLocomotion.controller rebuilt, no root motion, always animate) + PlayerAnimator + measured grounding (see the grounding log).");
+                return true;
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
+        }
+
+        /// <summary>
+        /// Configures the Animator on the character under <c>Visual</c> (avatar, locomotion controller rebuilt in place, no
+        /// root motion), adds a <see cref="PlayerAnimator"/> to the rig root, and grounds the character: the soles'
+        /// height in the animated idle pose is measured (<see cref="PlayerAnimationMenu.MeasureGrounding"/>) and the
+        /// character is placed so they sit on the rig origin. The capsule's skin width (the gap the CharacterController
+        /// keeps above the ground) is compensated at runtime by <see cref="PlayerAnimator"/>, which lowers the Visual by it
+        /// (plus its inspector nudge <c>groundOffset</c>). Idempotent.
+        /// </summary>
+        private static bool AddAnimation(GameObject root)
+        {
+            if (!PlayerAnimationMenu.EnsureAssets(true, out var controller, out Avatar avatar)) return false;
+
+            Transform visual = root.transform.Find("Visual");
+            if (visual == null || visual.childCount == 0)
+            {
+                Debug.LogError($"'{root.name}' has no Visual/<character> child to animate.");
+                return false;
+            }
+
+            Animator animator = visual.GetComponentInChildren<Animator>(true);
+            if (animator == null) animator = visual.GetChild(0).gameObject.AddComponent<Animator>();
+            PlayerAnimationMenu.ConfigureAnimator(animator, controller, avatar);
+
+            var playerAnimator = root.GetComponent<PlayerAnimator>();
+            if (playerAnimator == null) playerAnimator = root.AddComponent<PlayerAnimator>();
+            var animatorObject = new SerializedObject(playerAnimator);
+            animatorObject.FindProperty("animator").objectReferenceValue = animator;
+            animatorObject.FindProperty("cameraRig").objectReferenceValue = root.GetComponent<PlayerCameraRig>();
+            animatorObject.FindProperty("visual").objectReferenceValue = visual;
+            animatorObject.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(playerAnimator);
+
+            GroundCharacter(root, visual, animator, controller, avatar);
+            return true;
+        }
+
+        /// <summary>
+        /// Measures the soles in the animated idle pose and sets the character's local height under <c>Visual</c> so they
+        /// sit exactly on the rig origin (the bottom of the capsule). Keeps the current height if the measurement fails.
+        /// Logs every number, including the same measurement with Synty's own avatar for comparison.
+        /// </summary>
+        private static void GroundCharacter(GameObject root, Transform visual, Animator animator, RuntimeAnimatorController controller, Avatar avatar)
+        {
+            var body = root.GetComponent<CharacterController>();
+            var motor = root.GetComponent<PlayerMotor>();
+            var playerAnimator = root.GetComponent<PlayerAnimator>();
+            float skinWidth = body != null ? body.skinWidth : 0f;
+            float walkSpeed = motor != null ? motor.WalkSpeed : 1.6f;
+            Transform character = animator.transform;
+            float before = character.localPosition.y;
+            float visualY = visual.localPosition.y;
+            float nudge = playerAnimator != null ? playerAnimator.GroundOffset : 0f;
+
+            var log = new StringBuilder("Player grounding — heights in metres, + = up, relative to the character's origin unless noted:\n");
+            if (!PlayerAnimationMenu.MeasureGrounding(controller, avatar, walkSpeed, log, out PlayerAnimationMenu.GroundingResult measured))
+            {
+                log.AppendLine($"  NOT APPLIED: character height stays {before:0.000}. Use PlayerAnimator.groundOffset to correct by eye.");
+                Debug.LogWarning(log.ToString(), root);
+                return;
+            }
+
+            float after = -measured.IdleSole;
+            character.localPosition = new Vector3(character.localPosition.x, after, character.localPosition.z);
+            EditorUtility.SetDirty(character);
+
+            // Runtime: the rig origin rests skinWidth above the ground; PlayerAnimator lowers the Visual by skinWidth and adds the nudge.
+            float oldGap = before + measured.IdleSole + visualY + skinWidth;
+            float newGap = after + measured.IdleSole + nudge;
+            log.AppendLine($"  character local height: {before:0.000} (previous; the old renderer-bounds guess) → {after:0.000}; Visual edit-mode height {visualY:0.000}");
+            log.AppendLine($"  CharacterController: skinWidth {skinWidth:0.000} (kept), stepOffset {(body != null ? body.stepOffset : 0f):0.00}, centre {(body != null ? body.center.y : 0f):0.00} (kept); " +
+                           $"PlayerAnimator lowers the Visual by the skin width at runtime, groundOffset nudge {nudge:0.000}");
+            log.AppendLine($"  idle soles above the ground at runtime: before {oldGap:0.000} → after {newGap:0.000}; " +
+                           $"walk: planted foot {measured.WalkLowest - measured.IdleSole:+0.000;-0.000} vs idle, lower foot never above {measured.WalkHighestLowFoot - measured.IdleSole:+0.000;-0.000}");
+
+            Avatar synty = PlayerAnimationMenu.CharacterAvatar();
+            if (synty != null && synty != avatar)
+            {
+                log.AppendLine("  comparison with Synty's own avatar (not applied):");
+                if (PlayerAnimationMenu.MeasureGrounding(controller, synty, walkSpeed, log, out PlayerAnimationMenu.GroundingResult original))
+                {
+                    log.AppendLine($"  → Synty avatar idle soles {original.IdleSole:0.000} vs rebuilt {measured.IdleSole:0.000} (difference {(original.IdleSole - measured.IdleSole) * 100f:0.0} cm); " +
+                                   $"pelvis {original.PelvisHeight:0.000} vs {measured.PelvisHeight:0.000}; humanScale {original.HumanScale:0.000} vs {measured.HumanScale:0.000}");
+                }
+            }
+
+            Debug.Log(log.ToString(), root);
         }
 
         private static bool TryGetRendererBounds(GameObject gameObject, out Bounds bounds)

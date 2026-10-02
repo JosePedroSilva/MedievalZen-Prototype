@@ -66,9 +66,10 @@ ever needed. Unity terrains render up to 8 layers in one pass — pick ≤ 8 per
 |---|---|---|
 | Skydome mesh | `PNB_Core/Prefabs/SM_Env_Skydome_01` (material `PNB_Core/Materials/Skybox_Mat_01`); Meadow-tinted `PNB_Meadow_Forest/Materials/Skybox_Meadows_Mat_01`; alt `PolygonGeneric/Prefabs/Environment/SM_Gen_Env_Skydome_01` | ✅ |
 | Cloud rings (horizon clouds) | `PNB_Core/Prefabs/SM_Env_Cloud_Ring_01/02` (`Synty_Clouds_Meadows.mat`), `PolygonGeneric/.../SM_Gen_Env_Cloud_01..03`, `SM_Gen_Env_Cloud_Ring_01` | ✅ |
+| Cloud shader quirks | `PNB_Core/Shaders/Clouds.shadergraph` is URP Unlit and **opaque** (writes depth). Its fog term is an unclamped lerp toward `unity_FogColor` and its scattering weight is per-channel, so default colours render as saturated blue/pink. In this project both are disabled per renderer and colours come from `CloudColorModel` | ☑ |
 | Fog ring (horizon haze) | `PNB_Core/Prefabs/SM_Env_Fog_Ring_01`; `PNB_Meadow_Forest/FX/FX_Materials/Fog_Meadows_01.mat` | ✅ |
 | Weather | `PNB_Core/Prefabs/WeatherControl` (script `PNB_Core/Scripts/WeatherControl.cs`: two globals, `windIntensity` and `weatherIntensity`, pushed to the vegetation shaders), `FX_Rain_01`, `FX_Rain_Splash_01`, `FX_Snow_01` | ✅ |
-| Post-processing | `PNB_Meadow_Forest/Meadows_Post_Processing_01.asset` (URP Volume profile used by the demo scene) | ✅ start here for Phase 3 |
+| Post-processing | `PNB_Meadow_Forest/Meadows_Post_Processing_01.asset` is a **Post Processing Stack v2** profile, not a URP `VolumeProfile` — it does nothing in this project. Grading comes from `Assets/_Project/Settings/Atmosphere/TimeOfDay.asset` | ❌ |
 | Water plane | `PNB_Meadow_Forest/Prefabs/SM_Env_Water_Plane_01` with `Materials/Water_Lake.mat` (lakes) or `Water_Stream.mat`; `FX/FX_Water_Movement_01` ripples; also `PNB_Core/Prefabs/SM_Env_Water_Plane_01`, `PolygonGeneric/.../SM_Gen_Env_Water_Plane_01`, `SM_Gen_Env_Water_Dip_01` | ✅ |
 | Waterfalls | `PolygonGeneric/.../SM_Gen_Env_Waterfall_01/02` + `FX/FX_Waterfall_Foam_01` | ☑ (streams later) |
 | Ambient particles | Meadow `FX_Butterflies_Blue/Cabbage/Lunar/Monarch_01`, `FX_Petals_Red/Yellow_01`, `FX_Leaves_Meadows_01`, `FX_Leaves_Blowing_Meadows_01`, `FX_Dust_Spots_01`, `FX_SunBeam_01`, `FX_Wind_01`, `FX_Wind_Streaks_01`; Generic `FX_Flies_01`, `FX_Leaves_01`, `FX_SunBeam_01`, `FX_Fog_01`, `LightRay_Cube/Round`; Arid `FX_Vulture_01` (circling birds), `FX_TumbleWeed_01`, `FX_Dust_Blowing_01` | ✅ |
@@ -126,10 +127,11 @@ Generic `SM_Gen_Env_Mushroom_01..03` — ✅ forest floor. ❌ `SM_Prop_Mushroom
 | Family | Path | Count | Use |
 |---|---|---|---|
 | `SM_Env_Rock_01..06`, `Rock_Round_01`, `Rock_Small_01`, `Rock_Small_Pile_01..02`, `Rock_Pile_01..07`, `Rock_Ground_01..02` | Meadow | 20 | ✅ everywhere; `Rock_Ground` = flat outcrops |
-| `SM_Env_Rock_Cliff_01..03`, `SM_Env_Ground_Cliff_Large_01..02` | Meadow | 5 | ✅ escarpments, steep slopes |
+| `SM_Env_Rock_Cliff_01..03` | Meadow | 3 | ✅ cliff blocks 8-10 m tall (5x8x5, 12x8x8, 22x10x9 m); seat them against rising ground, never on crests |
+| `SM_Env_Ground_Cliff_Large_01..02` | Meadow | 2 | ⚠ NOT a wall: a raised disc ~40 m across with its pivot at the top and a 4-8 m cliff edge hanging down all round. Fits level ground only; on a slope or summit it hangs in the air. Not scattered |
 | `SM_Env_Ground_Mound_Large_01..04` | Meadow | 4 | ✅ terrain-breaking mounds |
-| `SM_Gen_Env_Rock_01..10`, `Rock_Pebbles_01..05` | Generic | 15 | ✅ |
-| `SM_Gen_Env_Cliff_01..04`, `Cliff_Arch_01..02`, `Cliff_Pillar_01`, `Dirt_Cliff_01..08` | Generic | 15 | ✅ cliffs, road cuttings, river banks |
+| `SM_Gen_Env_Rock_01..10`, `Rock_Pebbles_01..05` | Generic | 15 | ☑ lowland only (dark atlas colour clashes with Meadow rock). `Rock_01..03` and `08..10` have pivots 9-18 m away from the mesh: always centre by bounds |
+| `SM_Gen_Env_Cliff_01..04`, `Cliff_Arch_01..02`, `Cliff_Pillar_01`, `Dirt_Cliff_01..08` | Generic | 15 | ⚠ large (cliffs 8-15 m wide, 10-14 m tall; dirt cliffs up to 25 m) and a different colour family from Meadow rock. Catalogued but not used in the mountains |
 | `SM_Prop_StonePile_01..03`, `StoneStack_01..02`, `StoneRunes_01..03`, `Stone_Hole_01`, `StoneArch_01` | Meadow Props | 10 | ✅ cairns on passes, standing stones as rare landmarks, town gate arch |
 | `SM_Env_Rock_*`, `Rock_Cliff_01..16`, `Rock_Arch*`, `Rocks_Spikey*`, `Crater*` | Arid | ~50 | ☑ red/sand tone — only for a dry biome |
 | `SM_Gen_Env_Stalactite_01..04` | Generic | 4 | ☑ caves only |
@@ -179,6 +181,7 @@ perimeters, gate entries.
 | Group | Assets | Fit |
 |---|---|---|
 | Farm | Meadow `SM_Prop_ScareCrow_01`, `HandCart_01`, `Wagon_Broken_01`, `HorseHitch_01`, `Birdhouse_01..02`, `WindChime_01..02`, `Kite_01..03` (rare, near villages) | ✅ |
+| Picked by variant index | The generator selects some variants by index: cart variant 1 = `SM_Prop_Wagon_Broken_01` (lowest hairpin), stump-family variants 3-4 = logs (stacked by the mountain inn) | ✅ |
 | Camp (roadside rest, outside inns) | Meadow `SM_Prop_Camp_Tent_01`, `Camp_Fireplace_01..02`, `Camp_Fireplace_Stones_01`, `Camp_Fire_Tripod_01`, `Camp_Tanning_Rack_01`, `Camp_Crate_01`, `Camp_Bucket_01..02`, `Camp_Can_01..02`, `Camp_Pouch_01`; Arid `SM_Prop_Tent_01` | ✅ |
 | Storage & goods | Generic `SM_Gen_Prop_Barrel_Wood_01..03`, `Crate_01..03` (+`Crate_Preset`), `Sack_01..05`, `Sack_Stack_01..02`, `Pot_01..05`, `Chest_01..02`, `Plank_01..02`, `Rope_01..04`, `Rope_Knot_01`, `Chain_01..03`, `Chain_Anchor_01`, `Hook_01` | ✅ inn yards, markets, carts |
 | Furniture & tableware | Generic `Table_01`, `Chair_01`, `Shelf_01..03`, `Mug_01`, `Plate_01`, `Bottle_01..05`, `Food_Bread_01..02`, `Food_Meat_01..06`, `Food_Vegetable_01..06`, `Papers_01..06`, `Key_01`, `Coin_01`, `Coin_Pile_01..02`, `Coin_Stack_01..02`, `Potion_01` | ✅ inn interiors, market stalls |
@@ -251,19 +254,30 @@ Floats: `MoveSpeed`, `InclineAngle`, `LocomotionStartDirection`, `StrafeDirectio
   it partially leaves it stuck in Idle. Either port the parameter feeding (not the movement)
   from `SamplePlayerAnimationController`, or build a small purpose-made controller.
 - Masculine and Feminine sets are separate clips (different posture), not a blend.
+- The peasant's own Synty avatar (`PolygonGeneric/Models/Generic_Characters.fbx`, Humanoid) maps human
+  Hips to the ground-level `Root` bone, so hip motion is lost; `MedievalZen/Player/Build Locomotion
+  Controller` builds a corrected copy (`Assets/_Project/Animation/PeasantMale_Humanoid.asset`). The pack's
+  reference rig (`Meshes/PolygonSyntyCharacter.fbx`) is NOT a usable avatar source: same bone names but
+  different rest rotations and finger names.
+- Strafe and backward clips have the same natural speeds as the forward ones (walk 1.452 m/s, run
+  2.585-2.589 m/s, all eight directions); the player controller uses them in a 2D blend on
+  body-relative velocity.
+- Natural ground speeds of the forward cycles (measured from the root-motion twins): Walk_F 1.45 m/s,
+  Run_F 2.59 m/s, Sprint_F 7.24 m/s. Scale playback by ground speed ÷ natural speed to avoid foot sliding.
 
 ### Recommended use in MedievalZen
 - **Player (iteration 1 → "Phase 2b")**: a purpose-built Animator controller generated by an
   editor script (`UnityEditor.Animations.AnimatorController` API, saved under
   `Assets/_Project/Animation/`): base layer = 1D blend tree on normalised speed
   (`Idle_Standing` → `Walk_F` → `Run_F`/`Sprint_F`) with `Walk/Run_Up25F/Down25F` blended by
-  incline; `Idle_ToWalk*` starts and `Walk_ToIdleF_*` stops as short transitions;
+  incline; starts/stops are blend-tree cross-fades (the `Idle_ToWalk*` / `Walk_ToIdleF_*` clips last ~1 s, longer
+  than the motor's ~0.3 s acceleration, so they would slide);
   `Turn_Standing_90/180` for in-place turns in third person; an additive layer with
   `HeadLook`/`BodyLook` driven by the camera yaw/pitch (looking around while auto-travelling)
   and `Lean` by path curvature. Driven from `PlayerMotor` velocity/incline; no root motion.
 - **NPCs later**: the same controller on peasant villagers and travellers (walk cycles,
   idles, shuffles); Feminine set for female characters.
-- **Not needed**: Sidekick clips, crouch/strafe families, lock-on camera, the sample
+- **Not needed**: Sidekick clips, crouch families, lock-on camera, the sample
   `Controls.inputactions` (our own `InputSystem_Actions` stays the input source).
 
 ## Arid Desert pack — quick reference for a future dry biome
@@ -295,5 +309,5 @@ Floats: `MoveSpeed`, `InclineAngle`, `LocomotionStartDirection`, `StrafeDirectio
 | settlementProps | Meadow `HorseHitch_01`, `Sign_01..03`, `ScareCrow_01`, `HandCart_01`, `Birdhouse_*`, `WindChime_*`; Generic `Barrel_Wood_*`, `Crate_*`, `Sack_*`, `Pot_*`, `Table_01`, `Chair_01`, `Chest_*` |
 | roadside | Meadow `Wagon_Broken_01`, `HandCart_01`, `StonePile_*`, camp set; Arid `Bones_*` (rare) |
 | horizon | Meadow `Background_Hill_01` (model), Generic `Background_Mountain_01..03`, `Hill_01..05` |
-| sky/atmosphere | PNB_Core skydome + cloud ring + fog ring, `Skybox_Meadows_Mat_01`, `Meadows_Post_Processing_01`, `Fog_Meadows_01.mat`, `WeatherControl` |
+| sky/atmosphere | PNB_Core skydome + cloud ring + fog ring, `Skybox_Meadows_Mat_01`, `Fog_Meadows_01.mat`, `WeatherControl` |
 | ambientFx | Meadow butterflies (4), petals (2), leaves (2), `SunBeam_01`, `Wind_01`; Generic `Flies_01`; campfire `FX_Fire_01` + `FX_Smoke_01` |

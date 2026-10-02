@@ -13,7 +13,7 @@ a day/night cycle; entering an inn rests until morning. All art is Synty placeho
 
 ### Non-goals for iteration 1
 Combat, inventory, economy, NPC dialogue, save/load, procedural buildings from the modular
-kit, custom shaders, rivers (lakes with a water plane are in), horses/carts (auto-travel is "walking on autopilot").
+kit, custom shaders (exceptions since 2026-09-27: the full-screen atmospheric fog pass and the FireflyGlow particle shader), rivers (lakes with a water plane are in), horses/carts (auto-travel is "walking on autopilot").
 
 ## Tech baseline
 - Unity **6000.3.8f1**, URP (`Assets/Settings/PC_RPAsset`), new **Input System**
@@ -35,7 +35,7 @@ kit, custom shaders, rivers (lakes with a water plane are in), horses/carts (aut
   - `PNB_Arid_Desert` (unused for now), `PNB_Core` (skydome, cloud/fog rings, `WeatherControl`).
 - Humanoid animation: the Synty **ANIMATION Base Locomotion** pack (imported 2026-09-26, see
   `Docs/ASSET_CATALOG.md` → Animation) provides Humanoid idle/walk/run/turn/look clips for the
-  POLYGON rig. The player is still a static mesh until "Phase 2b" wires them in.
+  POLYGON rig; the player uses them through `PlayerLocomotion.controller` (Phase 2b).
 
 ## Project layout
 ```
@@ -112,6 +112,64 @@ Docs/                            this file and future notes
    scene-level `GameWorld` component; serialisable so generation can run from the editor menu
    (`MedievalZen/Generate World`) or at Play start from the same settings.
 
+### The mountain range and the pass (Phase 1c, 2026-09-27)
+- **Range, not plateau** (`MountainRange`): a ridge skeleton - a main ridge with four summits and a lower
+  col between the 2nd and 3rd (`passHeight`), side spurs, foothill knolls, two graded pass valleys cut
+  from the col down each side, crag detail that grows with height, and drainage carving
+  (`valleyCarving`). Relief stays about 240 m; the range covers roughly half the area the old plateau
+  did. The earlier masked ridged noise is gone; `mountainMaskRadius` now sets the range length,
+  `mountainMaskCentre` / `randomiseMountainSide` where it rises, `ridgeSharpness` the crag detail.
+- **Mountain inn** (`mountainInn`, on top of `innCount`): the flattest dry spot within 160 m of the col,
+  at 55 % of relief or higher; an ordinary `SettlementType.Inn`. Skipped with a logged reason when no
+  site qualifies. Towns and villages keep 400 m away from the col.
+- **Pass road** (`PassRouter`): hybrid A* over position and heading, laid in 5 m arcs (radius 8 m to
+  straight), climbing at most `maxRoadGrade` (12 %); 8 m hairpins, switchback legs at least 20 m apart.
+  Each side joins a lowland road; a two-sided pass closes a loop in the network. All road profiles are
+  grade-limited (12 % pass, 15 % lowland, 18 % hard limit over any 10 m). Roads are benched into the
+  slope with 45 degree cut banks (painted rock) and 35 degree fill banks.
+- **On the climb**: cairns every ~100 m above 58 % of relief and a large one at the pass, a viewpoint
+  (stone arch + rune stones, chosen by line of sight to the lowland and lakes), cliff meshes above road
+  cuts, a camp about two-thirds up, a broken wagon at the lowest hairpin, signposts at both junctions.
+- **Tree line** (`treeLine`, 0.7 of relief): broadleaf stops there; pines fade out by 0.86.
+- **Landmarks**: `LandmarkKind` gains `Pass` and `Viewpoint`; the parchment map draws and labels them.
+- **Summit architecture** (2026-09-27, after the first in-engine look): ridges have one steep and one
+  gentle side, each summit gets a horn and the crest small notches, the upper range has ~13 m cliff
+  bands (ledge, then a riser about three times steeper), gullies up to 6 m deep run down steep faces.
+  None of it is applied near the pass valleys or the col, so the inn shelf and road are unchanged.
+- **Known limits**: cliff bands can read as regular horizontal stripes from afar; seen from the inn the
+  nearest summits still look rounded (the keep-out zone covers their lower flanks); the climb is a steady
+  9-12 % with no level stretches; across seeds 1-16, 6 get a two-sided pass, 7 a one-way spur and 3 no
+  inn; generation takes about 5 s (was about 3 s); the lowland network still gains no loops of its own.
+
+### Terrain persistence and paint (rule learned 2026-09-27)
+- **Persist, then paint.** A `TerrainData` must be an asset on disk *before* terrain layers and
+  alphamaps are written to it. Painting an in-memory `TerrainData` and calling
+  `AssetDatabase.CreateAsset` afterwards saves default paint (layer 0 at 100 %): the world looks right
+  in the session that generated it and turns uniformly green when the scene is reopened.
+- All terrain writes go through `TerrainDataWriter` (create asset → heights → splat → trees → details →
+  save → verify). The verify step reloads a copy from disk, compares ~200 texels with the blueprint and
+  logs per-layer coverage, or an error naming the lost-paint signature.
+- `MedievalZen/Repaint Terrain` re-runs the pure generation and re-applies layers, alphamaps and
+  grass/flower detail maps to the existing terrain without touching trees, props or settlements.
+- Resolutions on the 2 km map: splat 2048 (1 m texels, crisp road edges); land cover, scatter and
+  grass density stay on a 1024 grid (`WorldGenParams.CoverResolution`).
+- Paint rules: road core is solid dirt to 0.5 m inside the road edge, 1.5 m soft shoulder, ~3 m worn
+  verge. Rock blends in from 30° and is solid from 40° slope in every biome (`LandCover.Slope` is rise
+  over run, 1 = 45°); only town cobbles and road dirt outrank rock. Ground within 16 m below a cliff band is painted as scree (dirt with
+  rock flecks); above the tree line the grass is always the dry layer.
+- **Rock layer**: the rock splat channel uses a first-party `RockWall.terrainlayer` (created by the
+  palette menu from Synty's `RockWall_Texture_01`, 5 m tiles) so the ground matches the Meadow rock
+  meshes, which use the same texture.
+- **Rock and cliff props are seated, never dropped at a pivot** (`RockPlacer`, fed by `PropMetrics`
+  measured per prefab by the palette menu): sizes are specified in metres (boulders 0.6-2.5 m, cliffs
+  3-8 m, nothing over 10 m); every piece is sunk until no part of its footprint has air under it; cliff
+  pieces must be backed by ground reaching 70 % of their height, face downhill, and are never placed on
+  convex ground (crests, summit cones); boulders and slabs lean part-way to the ground normal. Only
+  Meadow rock pieces are used in the highlands. `WorldBuilder` re-checks every piece with real bounds
+  after instantiating and sinks, shrinks or removes what still fails, logging one line per family.
+- `TerrainPersistenceTests` (EditMode, uses `AssetDatabase`) saves a small terrain, reloads it from disk
+  and fails if the paint is gone.
+
 ### Roads runtime API — the contract between world and player work
 ```csharp
 namespace MedievalZen.Roads
@@ -152,6 +210,19 @@ One `PlayerRig` prefab; all three modes share it.
   slope handling). Exposes `Move(Vector3 worldDir, float speedScale)`, `Face(Vector3 dir, float turnSpeed)`
   and `Teleport` so both manual
   input and the auto-traveller drive the same code path.
+- Turning model (2026-09-27, after the animated character was seen moonwalking): in third person and
+  auto-travel the motor is driven with `MoveFacing` - the body turns toward the request (300 deg/s cap),
+  the velocity follows the body's forward, and speed falls as the request swings behind (full speed within
+  35 deg, zero beyond 155 deg), so a reversal is slow down, arc round, walk away. First person uses `Move` +
+  `Face` and may strafe; the velocity swings toward the request at 540 deg/s. Speeds are unchanged.
+  Pure maths in `MotorMath`. `RouteFollower` moves the steering point on when it comes within 1.25 m
+  (hairpin guard).
+- Animation blend: 2D on body-relative velocity (`VelocityX`, `VelocityZ`): idle, four rings of eight
+  directions (walk x0.6, x1, x1.25, run) using the pack's strafe/backward clips, sprint forward only.
+  Strafe clips share the forward clips' natural speeds (walk 1.452, run 2.585 m/s).
+- Grounding: the rig menus measure the lowest sole vertex over the idle and walk cycles and place the
+  Visual so idle soles sit on the ground; `PlayerAnimator` lowers the Visual by the controller's skin
+  width (0.04 m, kept for collision stability) plus the inspector field `groundOffset`.
 - `PlayerController` — references the `InputActionAsset` (no generated C# wrapper) and resolves
   actions by path, e.g. `FindAction("Player/Move")`, `"Player/Look"`, `"Player/Sprint"`; manual
   mode: camera-relative Move, Look, Sprint. Any Move input while auto-travelling cancels it.
@@ -162,9 +233,15 @@ One `PlayerRig` prefab; all three modes share it.
   mesh set to shadows-only) and third-person (orbit, 3.5 m, pitch clamp, sphere-cast collision). Toggle
   with `V`, smooth blend. Look sensitivity/invert are serialized fields on the rig.
 - Default key map: `V` camera mode, `T` toggle auto-travel (needs a destination), `M` map,
-  `E` interact (`Interact` action, press), `Esc` pause (toggles cursor lock).
-- Visual: `SM_Gen_Chr_Peasent_Male_01` on the rig — static until Phase 2b adds an Animator
-  built from the Base Locomotion clips (in-place clips only; `PlayerMotor` stays the movement authority).
+  `E` interact (`Interact` action, press), `Esc` / gamepad Start opens the Journey menu (time, weather, atmosphere, view, fast travel; frees the cursor).
+- Visual: `SM_Gen_Chr_Peasent_Male_01` on the rig, animated by `PlayerAnimator` (order 110, only
+  observes `PlayerMotor`; `applyRootMotion = false`) with `Assets/_Project/Animation/PlayerLocomotion.controller`:
+  speed × incline blend of in-place Idle/Walk/Run/Sprint clips with playback scaled to ground speed
+  (natural speeds Walk 1.45, Run 2.59, Sprint 7.24 m/s), fall/land, additive body-look, head-look and
+  lean layers driven by the camera and turn rate. Uses a corrected avatar
+  (`PeasantMale_Humanoid.asset`) because Synty's maps human Hips to the ground-level `Root` bone. The build
+  instance must be named after the model's root (`Generic_Characters(Clone)`), not the prefab, or
+  `AvatarBuilder` rejects the hierarchy.
 
 ### Travel loop
 - **Destination — a physical map** (`M`): the character unfolds a parchment map and holds it
@@ -184,6 +261,15 @@ One `PlayerRig` prefab; all three modes share it.
 - Auto-travel route = `RoadNetwork.TryFindRoute(Project(player), destination)`.
 - Arrival: settlement trigger → toast "You arrive at <name>". At an inn, `Interact` → rest:
   fade to black, time skips to 06:00, fade in.
+- **Journey menu** (`Esc` / Start; user request 2026-09-27): a right-hand side panel built by the HUD at
+  runtime, so it needs no scene changes (a HUD is created for scenes without one). Pages Time / Sky /
+  View / Where to?; every change applies live behind the panel. The time slider and the Dawn / Noon /
+  Dusk / Night buttons set the hour on the current day (`DayCycle.SetHourOfDay`; the day counter never
+  changes); Flow of time sets `DayCycle.TimeScale` (0, 0.5, 1, 2, 4). Weather choices use
+  `WeatherSystem.Force(state, 5 s)`. Fast travel uses `FastTravelPlanner` (settlement: its own road,
+  radius + 6 m out, facing the centre; landmark: nearest dry, gentle road point, facing it) with a HUD
+  fade. Preferences persist in PlayerPrefs `MedievalZen.JourneySettings` (versioned JSON; the time of
+  day is not saved). It only exposes controls: it never changes the defaults of the systems it drives.
 - `DayCycle`: 24-minute day by default; rotates the sun, drives ambient/fog colour and the
   Synty skydome tint; time of day shown on the HUD. Weather: hook Synty `WeatherControl`
   from `PNB_Core` if it works under URP; otherwise a later iteration.
@@ -191,7 +277,7 @@ One `PlayerRig` prefab; all three modes share it.
 ### Editor tooling
 - `MedievalZen/Setup Demo Scene` / `Open Demo Scene` — generates the world via
   `WorldGeneratorMenu.GenerateWorld`, then adds `DayCycle` (owns the sun), a player-following
-  `Sky` root (skydome, cloud ring, fog ring), the Meadow post-processing Volume, `WeatherControl`,
+  `Sky` root (skydome, cloud ring, fog ring), the TimeOfDay grading volume (see below), `WeatherControl`,
   the HUD canvas + EventSystem and `AmbientFx`; saves `Assets/_Project/Scenes/Demo.unity`.
 - `MedievalZen/Generate World` — runs generation for the selected `WorldSettings` (creates the
   palette if missing, places the `PlayerRig` and a sun if the scene has none). Also
@@ -200,6 +286,34 @@ One `PlayerRig` prefab; all three modes share it.
 - `MedievalZen/Player/Create Player Rig Prefab` → `Assets/_Project/Prefabs/PlayerRig.prefab`.
 - `MedievalZen/Player/Create Player Test Scene` → `Assets/_Project/Scenes/PlayerTest.unity`: flat
   ground, dirt road ribbon and the rig, built from `TestRoadNetworks.Triangle()` (3 settlements + junction).
+- `MedievalZen/Player/Build Locomotion Controller` (avatar + `PlayerLocomotion.controller`; logs measured
+  clip speeds and look extents) and `MedievalZen/Player/Upgrade Player Rig (Add Animation)` (patches
+  `PlayerRig.prefab` in place; scenes pick it up without regenerating the world).
+- `MedievalZen/Repaint Terrain` — repairs/refreshes ground paint on the existing world (see Terrain
+  persistence and paint).
+- `MedievalZen/Atmosphere/Apply To Open Scene` — idempotent; `Setup Demo Scene` calls it. Adds the
+  "AtmosphericFog" Full Screen Pass to `PC_Renderer` (before post-processing, depth input), sets
+  shadows on `PC_RPAsset` (180 m, 4 cascades, 4096 atlas), creates the TimeOfDay grading volume
+  (`Assets/_Project/Settings/Atmosphere/TimeOfDay.asset`) and the Atmosphere object
+  (`AtmosphereController` with the `Fog Amount` / `Haze Distance` master sliders, `WeatherSystem`,
+  `MistField`, optional procedural wind audio), rain under the sky root, and `SettlementAmbience`
+  (chimney smoke, window lights, campfires; 16-light global cap) on every settlement.
+- Post-processing: Synty's `Meadows_Post_Processing_01.asset` is a Post Processing Stack v2 profile and
+  does nothing under URP; all grading comes from the TimeOfDay volume.
+- Clouds (fixed 2026-09-27 after they rendered as saturated blue cut-outs): the Synty cloud graph is
+  URP Unlit and **opaque**; it blends toward `unity_FogColor` with an unclamped lerp and applies
+  scattering with a per-channel weight, so it cannot be trusted to follow the atmosphere. Both are
+  switched off per renderer (`_Enable_Fog = 0`, `_Enable_Scattering = 0` via MaterialPropertyBlock) and
+  all cloud colours come from `CloudColorModel`, driven by `DayCycle`: sun-tinted near-white lit side,
+  greyed horizon/fog mix on the shaded side, weather tint, then a pull toward the fog colour, every
+  colour capped to `cloudSaturation`. In the fog pass, cloud-ring pixels are part of the sky layer and
+  get a haze tail by elevation (up to 22-50 degrees, never above 60; zenith stays clear). User control:
+  `Cloud Softness` (0-2) on `AtmosphereController`.
+- Built-in fog while the full-screen pass is live: enabled as Linear 20-40 km with the atmosphere fog
+  colour, i.e. factor 0 on anything nearer than 20 km. It exists only to keep fog shader variants and
+  Lit shaders consistent; the pass does the look. Grading: profile saturation +6, golden hour +6.
+- Fog fallback: if the full-screen pass is missing or unsupported (e.g. the Mobile quality level),
+  `AtmosphereController` switches to built-in exponential-squared fog with the same day curves.
 - Gizmos: road polylines, nodes, settlement radii.
 
 ## Delegation plan and status
@@ -211,10 +325,15 @@ Status as of 2026-09-27 (compile check green; last in-editor test run 87/87).
 | 1 | World generation (steps 1–9) and the `Generate World` menu | 0 | done — relief, lakes, 8 terrain layers, scatter rules, details, horizon |
 | 2 | Player rig: motor, controller, auto-traveller, camera rig, test scene with a hand-built road | 0 (runs in parallel with 1) | done — tuning validated by the user |
 | 3 | Integration: demo-scene setup, held map, signposts, arrival/inn rest, day cycle, HUD | 1, 2 | done — needs a full playtest by the user |
-| 2b | Character animation: `PlayerLocomotion.controller` built from Synty Base Locomotion in-place clips, `PlayerAnimator`, optional map-holding hand IK | 2, 3 | in progress (started 2026-09-27) |
+| 1c | The mountain pass (user request 2026-09-27): massif reshaped from a plateau into a range (peaks, valleys, a saddle), a mountain inn high in the range, a pass road with grade-limited switchbacks linking it to the lowland from both sides (adds a loop), cairns / viewpoint / camp along the climb, tree line, pass and viewpoint landmarks on the map. Requires `Generate World` again | 1 | done - checked offline (previews, 26 tests, auto-travel simulation); needs an in-editor look by the user |
+| E0 | Endless Road mode (user request 2026-10-01, see `Docs/ENDLESS_ROAD.md`): contract in `Scripts/Endless/Contract/` and design | — | done |
+| E1 | Endless Road: pure generator (road, regions, global heights, tile blueprints reusing the finite stages with an absolute origin), tests, offline previews | E0 | done — pure generator, previews, 22 tests; finite world bit-identical (golden hashes); needs an in-editor look |
+| E2 | Endless Road: streaming runtime (worker-thread generation, sliced apply, far silhouettes, floating origin), adapters for shared systems, scene menu, travel, HUD, Journey page, persistence | E0 | done — checked offline (22 tests, compile); needs an in-editor look |
+| 3b | Atmosphere (user request 2026-09-27: "improve the looks adding some fog and ambience"): full-screen height + distance fog with sun scattering, `AtmosphereController`, `WeatherSystem` (clear/hazy/misty/overcast/light rain), mist patches over lakes and valleys, longer shadows, time-of-day grading, settlement lights + chimney smoke, richer ambient life; applies to an existing scene via `MedievalZen/Atmosphere/Apply To Open Scene` | 3 | done - fog and clouds verified in the editor by the user (2026-09-27); weather states, settlement lights and night still to be looked at |
+| 2b | Character animation: `PlayerLocomotion.controller` built from Synty Base Locomotion in-place clips, `PlayerAnimator`, optional map-holding hand IK | 2, 3 | done - verified in the editor by the user (2026-09-27): avatar, grounding, turning feel |
 
 Open items after 2b: user playtest of the whole loop in `Demo.unity`; first git commit (decide
-how to handle the ~35 MB generated `TerrainData` and ~21 MB scene — Git LFS or regenerate from
+how to handle the ~68 MB generated `TerrainData` and ~21 MB scene — Git LFS or regenerate from
 seed); ambient audio (no audio assets in the project yet).
 
 ## Compile-checking without the editor

@@ -26,6 +26,9 @@ namespace MedievalZen.World
 
         /// <summary>Smoothed centre line, about 2 m spacing, starting exactly on node A and ending on node B.</summary>
         public List<Vector3> Points = new List<Vector3>();
+
+        /// <summary>True for a mountain pass road (laid out by <see cref="PassRouter"/>, profiled to the pass design grade).</summary>
+        public bool Pass;
     }
 
     /// <summary>Output of <see cref="RoadPlanner.Plan"/>: routed road topology before heights are applied.</summary>
@@ -52,8 +55,9 @@ namespace MedievalZen.World
 
     /// <summary>
     /// Plans the road network: Gabriel-graph candidates → MST plus useful shortcuts → A* routing on a 10 m
-    /// cost grid (slope-averse, cheap on existing roads so routes merge into trunks) → cell graph with nodes at
-    /// settlements, junctions and inserted inns → Douglas-Peucker + centripetal Catmull-Rom curves.
+    /// cost grid (slope- and altitude-averse, so lowland roads go round the mountains; cheap on existing roads so routes
+    /// merge into trunks) → cell graph with nodes at settlements, junctions and inserted inns → Douglas-Peucker +
+    /// centripetal Catmull-Rom curves. The mountain inn's pass roads are added afterwards by <see cref="MountainPassPlanner"/>.
     /// Heights are applied later (<see cref="ComputeProfiles"/>) once the terrain has been flattened.
     /// </summary>
     public static class RoadPlanner
@@ -68,7 +72,13 @@ namespace MedievalZen.World
         public const float ReuseFactor = 0.3f;
 
         /// <summary>An extra (non-MST) edge is kept when the existing path is at least this many times longer.</summary>
-        public const float LoopDetourRatio = 1.6f;
+        public const float LoopDetourRatio = 1.35f;
+
+        /// <summary>Cost multiplier per squared normalised height above <see cref="AltitudeFree"/> (keeps lowland roads low).</summary>
+        public const float AltitudePenalty = 80f;
+
+        /// <summary>Normalised height below which altitude costs nothing.</summary>
+        public const float AltitudeFree = 0.35f;
 
         /// <summary>Douglas-Peucker tolerance before curve fitting, in metres.</summary>
         public const float SimplifyTolerance = 6f;
@@ -104,9 +114,10 @@ namespace MedievalZen.World
 
         /// <summary>
         /// Routes roads between <paramref name="sites"/> (which are copied into the plan; inns are appended,
-        /// named by <paramref name="names"/>). Deterministic; uses no randomness beyond the names.
+        /// named by <paramref name="names"/>). Site <paramref name="unlinkedSite"/> (the mountain inn) gets a node but no
+        /// lowland roads: its pass roads are laid out separately. Deterministic; uses no randomness beyond the names.
         /// </summary>
-        public static RoadPlan Plan(WorldGenParams p, Relief relief, List<SettlementSite> sites, SettlementNames names)
+        public static RoadPlan Plan(WorldGenParams p, Relief relief, List<SettlementSite> sites, SettlementNames names, int unlinkedSite = -1)
         {
             if (sites == null) throw new ArgumentNullException(nameof(sites));
             if (relief == null) throw new ArgumentNullException(nameof(relief));
@@ -130,6 +141,8 @@ namespace MedievalZen.World
                     grid.Water[c] = relief.HasWater && grid.Height[c] < relief.WaterHeight + 0.5f;
                     int edge = Mathf.Min(Mathf.Min(x, z), Mathf.Min(gw - 1 - x, gw - 1 - z));
                     if (edge < 5) grid.Penalty[c] = (5 - edge) * 1.5f;
+                    float high = Mathf.Max(0f, grid.Height[c] / Mathf.Max(1e-3f, p.hillAmplitude) - AltitudeFree);
+                    grid.Penalty[c] += AltitudePenalty * high * high;
                 }
             }
 
@@ -142,7 +155,7 @@ namespace MedievalZen.World
             }
 
             // 1. Candidate edges: Gabriel graph, MST + detour-saving extras.
-            List<(int a, int b)> edges = ChooseEdges(sites);
+            List<(int a, int b)> edges = ChooseEdges(sites, unlinkedSite);
             edges.Sort((e1, e2) =>
             {
                 bool t1 = sites[e1.a].Type == SettlementType.Town && sites[e1.b].Type == SettlementType.Town;
@@ -224,7 +237,9 @@ namespace MedievalZen.World
         /// <summary>
         /// Samples <paramref name="heightmap"/> (already flattened under settlements) along every segment and
         /// smooths the elevation with a <see cref="ProfileWindow"/> moving average, pinned to the node heights at
-        /// both ends so all roads meeting at a node agree. Returns one point array per segment (y = road height).
+        /// both ends so all roads meeting at a node agree, then limits the grade (<see cref="LimitGrade"/>) to the pass design
+        /// grade on pass roads and <see cref="WorldGenParams.LowlandRoadGrade"/> elsewhere; carving then cuts and fills the
+        /// terrain to the profile. Returns one point array per segment (y = road height).
         /// </summary>
         public static List<Vector3[]> ComputeProfiles(RoadPlan plan, WorldGenParams p, float[,] heightmap, out float[] nodeHeights)
         {
@@ -257,7 +272,7 @@ namespace MedievalZen.World
                 float hB = nodeHeights[segment.NodeB];
                 const float PinDistance = 30f;
 
-                var result = new Vector3[n];
+                var heights = new float[n];
                 for (int i = 0; i < n; i++)
                 {
                     int lo = Mathf.Max(0, i - half);
@@ -267,8 +282,15 @@ namespace MedievalZen.World
                     float fromEnd = total - along[i];
                     h = Mathf.Lerp(hA, h, SmoothStep01(fromStart / PinDistance));
                     h = Mathf.Lerp(hB, h, SmoothStep01(fromEnd / PinDistance));
+                    heights[i] = h;
+                }
+
+                LimitGrade(heights, along, segment.Pass ? p.maxRoadGrade : WorldGenParams.LowlandRoadGrade, hA, hB);
+                var result = new Vector3[n];
+                for (int i = 0; i < n; i++)
+                {
                     Vector3 pt = segment.Points[i];
-                    result[i] = new Vector3(pt.x, h, pt.z);
+                    result[i] = new Vector3(pt.x, heights[i], pt.z);
                 }
 
                 result[0].y = hA;
@@ -277,6 +299,53 @@ namespace MedievalZen.World
             }
 
             return profiles;
+        }
+
+        /// <summary>
+        /// Makes <paramref name="heights"/> (at arc lengths <paramref name="along"/>) climb no steeper than <paramref name="grade"/>
+        /// while staying close to the terrain it was sampled from, and pins the ends exactly to <paramref name="startHeight"/> /
+        /// <paramref name="endHeight"/>. The largest grade-limited profile below the heights and the smallest one above them are
+        /// averaged (so cut and fill balance), then clamped into the cones of reachable heights from both ends; averages and
+        /// clamps of grade-limited profiles stay grade-limited. When the ends themselves are too far apart in height for the
+        /// grade, the profile becomes a straight ramp between them. Pure; modifies <paramref name="heights"/> in place.
+        /// </summary>
+        public static void LimitGrade(float[] heights, float[] along, float grade, float startHeight, float endHeight)
+        {
+            int n = heights.Length;
+            if (n < 2) return;
+            float total = along[n - 1];
+            if (Mathf.Abs(endHeight - startHeight) > grade * total)
+            {
+                for (int i = 0; i < n; i++) heights[i] = Mathf.Lerp(startHeight, endHeight, total > 0f ? along[i] / total : 0f);
+                return;
+            }
+
+            var lower = new float[n];
+            var upper = new float[n];
+            lower[0] = upper[0] = heights[0];
+            for (int i = 1; i < n; i++)
+            {
+                float step = grade * (along[i] - along[i - 1]);
+                lower[i] = Mathf.Min(heights[i], lower[i - 1] + step);
+                upper[i] = Mathf.Max(heights[i], upper[i - 1] - step);
+            }
+
+            for (int i = n - 2; i >= 0; i--)
+            {
+                float step = grade * (along[i + 1] - along[i]);
+                lower[i] = Mathf.Min(lower[i], lower[i + 1] + step);
+                upper[i] = Mathf.Max(upper[i], upper[i + 1] - step);
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                float h = 0.5f * (lower[i] + upper[i]);
+                float fromStart = grade * along[i];
+                float fromEnd = grade * (total - along[i]);
+                float lo = Mathf.Max(startHeight - fromStart, endHeight - fromEnd);
+                float hi = Mathf.Min(startHeight + fromStart, endHeight + fromEnd);
+                heights[i] = Mathf.Clamp(h, lo, Mathf.Max(lo, hi));
+            }
         }
 
         /// <summary>
@@ -321,14 +390,16 @@ namespace MedievalZen.World
 
         // ---------------------------------------------------------------- edges
 
-        private static List<(int a, int b)> ChooseEdges(List<SettlementSite> sites)
+        private static List<(int a, int b)> ChooseEdges(List<SettlementSite> sites, int unlinkedSite)
         {
             int n = sites.Count;
             var gabriel = new List<(int a, int b, float length)>();
             for (int i = 0; i < n; i++)
             {
+                if (i == unlinkedSite) continue;
                 for (int j = i + 1; j < n; j++)
                 {
+                    if (j == unlinkedSite) continue;
                     Vector3 pi = sites[i].Position;
                     Vector3 pj = sites[j].Position;
                     float mx = (pi.x + pj.x) * 0.5f;
@@ -337,7 +408,7 @@ namespace MedievalZen.World
                     bool empty = true;
                     for (int k = 0; k < n && empty; k++)
                     {
-                        if (k == i || k == j) continue;
+                        if (k == i || k == j || k == unlinkedSite) continue;
                         Vector3 pk = sites[k].Position;
                         float dx = pk.x - mx;
                         float dz = pk.z - mz;

@@ -20,7 +20,8 @@ namespace MedievalZen.EditorTools
     /// Generate World), the PlayerRig with the Phase-3 travel components (held map, interactor, arrival toasts), a day cycle
     /// owning the sun, a player-following sky (Synty skydome, cloud ring, horizon fog ring), the Meadow post-processing
     /// volume, Synty WeatherControl with a gentle breeze, the HUD canvas + EventSystem and the ambient FX spawner.
-    /// <c>MedievalZen/Open Demo Scene</c> opens it.
+    /// <c>MedievalZen/Open Demo Scene</c> opens it. The scene building blocks (sun, sky, day cycle, post-processing, weather,
+    /// UI, ambient effects) are shared with the endless road's scene menu (<see cref="EndlessRoadMenu"/>).
     /// </summary>
     internal static class DemoSceneMenu
     {
@@ -89,12 +90,13 @@ namespace MedievalZen.EditorTools
             CreateWeather();
             CreateUi();
             CreateAmbientFx(player.transform);
+            Debug.Log(AtmosphereMenu.ApplyToScene(player.transform));
 
             EditorSceneManager.MarkSceneDirty(scene);
             WorldPaletteMenu.EnsureFolder(ScenePath.Substring(0, ScenePath.LastIndexOf('/')));
             if (EditorSceneManager.SaveScene(scene, ScenePath))
             {
-                Debug.Log($"Created {ScenePath}. Press Play: WASD walk, mouse look, V camera, M map, E interact, T auto-travel, Esc free the cursor.");
+                Debug.Log($"Created {ScenePath}. Press Play: WASD walk, mouse look, V camera, M map, E interact, T auto-travel, Esc journey menu (time, weather, view, travel).");
             }
         }
 
@@ -150,7 +152,7 @@ namespace MedievalZen.EditorTools
             return component != null ? component : go.AddComponent<T>();
         }
 
-        private static Light FindSun()
+        internal static Light FindSun()
         {
             foreach (Light light in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
             {
@@ -163,7 +165,7 @@ namespace MedievalZen.EditorTools
             return sun;
         }
 
-        private static (Renderer[] sky, Renderer[] clouds, Renderer[] fog) CreateSky(Transform player)
+        internal static (Renderer[] sky, Renderer[] clouds, Renderer[] fog) CreateSky(Transform player)
         {
             var root = new GameObject("Sky");
             root.transform.position = player.position;
@@ -222,7 +224,7 @@ namespace MedievalZen.EditorTools
 
         private static Renderer[] Renderers(GameObject go) => go != null ? go.GetComponentsInChildren<Renderer>(true) : new Renderer[0];
 
-        private static void CreateDayCycle(Light sun, Renderer[] sky, Renderer[] clouds, Renderer[] fog)
+        internal static void CreateDayCycle(Light sun, Renderer[] sky, Renderer[] clouds, Renderer[] fog)
         {
             var cycle = new GameObject("DayCycle").AddComponent<DayCycle>();
             if (sun != null)
@@ -238,7 +240,7 @@ namespace MedievalZen.EditorTools
             EditorUtility.SetDirty(cycle);
         }
 
-        private static void CreatePostProcessing()
+        internal static void CreatePostProcessing()
         {
             var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(PostProcessingPath);
             if (profile == null)
@@ -253,7 +255,7 @@ namespace MedievalZen.EditorTools
             volume.sharedProfile = profile;   // referenced, not copied
         }
 
-        private static void CreateWeather()
+        internal static void CreateWeather()
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(WeatherControlPath);
             if (prefab == null)
@@ -274,7 +276,7 @@ namespace MedievalZen.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static void CreateUi()
+        internal static void CreateUi()
         {
             var ui = new GameObject("UI", typeof(RectTransform));
             ui.layer = LayerMask.NameToLayer("UI") >= 0 ? LayerMask.NameToLayer("UI") : 0;
@@ -293,7 +295,7 @@ namespace MedievalZen.EditorTools
             new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
         }
 
-        private static void CreateAmbientFx(Transform player)
+        internal static void CreateAmbientFx(Transform player)
         {
             var spawner = new GameObject("AmbientFx").AddComponent<AmbientFxSpawner>();
             var so = new SerializedObject(spawner);

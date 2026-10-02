@@ -7,9 +7,11 @@ namespace MedievalZen.Environment
 {
     /// <summary>
     /// Drives the time of day: owns a <see cref="DayClock"/>, turns the directional light (sun by day, a faint blue moon by
-    /// night), and colours the ambient light, the distance fog, the Synty skydome (<c>_Top_Color</c>/<c>_Bottom_Color</c>),
-    /// the cloud ring and the horizon fog ring from gradients over the day. Colours are applied with
-    /// <see cref="MaterialPropertyBlock"/>s so the Synty materials are never modified. Time keeps running while the map is open.
+    /// night), and colours the ambient light, the distance fog, the Synty skydome (<c>_Top_Color</c>/<c>_Bottom_Color</c>)
+    /// and the horizon fog ring from gradients over the day. The cloud ring colours come from <see cref="CloudColorModel"/>
+    /// (sky, sun and fog colours, weather overcast and the atmosphere's haze), replacing the Synty defaults. Colours are
+    /// applied with <see cref="MaterialPropertyBlock"/>s so the Synty materials are never modified. Time keeps running while
+    /// the map is open.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-60)]
@@ -19,6 +21,10 @@ namespace MedievalZen.Environment
         private static readonly int BottomColorId = Shader.PropertyToID("_Bottom_Color");
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int CloudBaseColorId = Shader.PropertyToID("_Base_Color");
+        private static readonly int CloudFresnelColorId = Shader.PropertyToID("_Fresnel_Color");
+        private static readonly int CloudScatteringColorId = Shader.PropertyToID("_Scattering_Color");
+        private static readonly int CloudEnableFogId = Shader.PropertyToID("_Enable_Fog");
+        private static readonly int CloudEnableScatteringId = Shader.PropertyToID("_Enable_Scattering");
 
         [Header("References")]
         [SerializeField, Tooltip("Directional light used as sun and moon.")]
@@ -27,7 +33,7 @@ namespace MedievalZen.Environment
         [SerializeField, Tooltip("Skydome renderers (Synty SkyDome shader: _Top_Color / _Bottom_Color).")]
         private Renderer[] skyRenderers = Array.Empty<Renderer>();
 
-        [SerializeField, Tooltip("Cloud ring renderers (Synty Clouds shader: _Base_Color / _Top_Color are multiplied by the cloud tint).")]
+        [SerializeField, Tooltip("Cloud ring renderers (Synty Clouds shader: _Base_Color / _Top_Color / _Fresnel_Color come from the cloud colour model).")]
         private Renderer[] cloudRenderers = Array.Empty<Renderer>();
 
         [SerializeField, Tooltip("Horizon fog ring renderers (_BaseColor follows the fog colour, keeping the material's alpha).")]
@@ -119,16 +125,8 @@ namespace MedievalZen.Environment
             (0.34f, new Color(1f, 0.92f, 0.84f)), (0.66f, new Color(1f, 0.94f, 0.88f)), (0.74f, new Color(1f, 0.55f, 0.35f)),
             (0.79f, new Color(0.08f, 0.1f, 0.18f)), (1f, new Color(0.06f, 0.08f, 0.14f)));
 
-        [SerializeField, Tooltip("Multiplier on the cloud ring colours over the day.")]
-        private Gradient cloudTint = MakeGradient(
-            (0.0f, new Color(0.14f, 0.16f, 0.24f)), (0.22f, new Color(0.16f, 0.18f, 0.26f)), (0.27f, new Color(1f, 0.75f, 0.65f)),
-            (0.35f, new Color(1f, 1f, 1f)), (0.65f, new Color(1f, 1f, 1f)), (0.73f, new Color(1f, 0.7f, 0.55f)),
-            (0.79f, new Color(0.16f, 0.18f, 0.26f)), (1f, new Color(0.14f, 0.16f, 0.24f)));
-
         private DayClock clock;
         private MaterialPropertyBlock block;
-        private Color[] cloudBase = Array.Empty<Color>();
-        private Color[] cloudTop = Array.Empty<Color>();
         private float[] fogRingAlpha = Array.Empty<float>();
         private int lastWholeHour = -1;
 
@@ -157,6 +155,45 @@ namespace MedievalZen.Environment
             set => sun = value;
         }
 
+        /// <summary>Weather hook: multiplier on the sun and moon intensity (1 = unchanged). Set every frame by the weather.</summary>
+        public float SunIntensityMultiplier { get; set; } = 1f;
+
+        /// <summary>Weather hook: multiplier on the cloud ring colours (white = unchanged).</summary>
+        public Color CloudTintMultiplier { get; set; } = Color.white;
+
+        /// <summary>Atmosphere hook, 0..1: haze around the clouds (pulls them toward the fog colour). Set every frame by the atmosphere.</summary>
+        public float CloudHaze { get; set; }
+
+        /// <summary>Atmosphere hook: the cloud look (saturation cap, contrast, softness). Set every frame by the atmosphere.</summary>
+        public CloudLookSettings CloudLook { get; set; } = CloudLookSettings.Default;
+
+        /// <summary>
+        /// Atmosphere hook: while true the cycle leaves <c>RenderSettings.fogStartDistance</c> / <c>fogEndDistance</c> alone
+        /// (the atmosphere owns the built-in fog).
+        /// </summary>
+        public bool ExternalFogDistances { get; set; }
+
+        /// <summary>Cloud colours applied this frame.</summary>
+        public CloudColors CurrentCloudColors { get; private set; }
+
+        /// <summary>Weather hook, 0..1: greys the skydome and the fog colour toward an overcast sky (0 = unchanged).</summary>
+        public float Overcast { get; set; }
+
+        /// <summary>Fog colour applied this frame (after the overcast hook); the horizon fog ring uses it too.</summary>
+        public Color CurrentFogColor { get; private set; } = new Color(0.75f, 0.8f, 0.85f);
+
+        /// <summary>Sun elevation in degrees this frame (negative at night).</summary>
+        public float SunElevation { get; private set; }
+
+        /// <summary>World direction toward the light (the sun by day, the moon by night).</summary>
+        public Vector3 LightDirection { get; private set; } = Vector3.up;
+
+        /// <summary>Skydome renderers (read-only view, used by the atmosphere to find the sky's size).</summary>
+        public Renderer[] SkyRenderers => skyRenderers;
+
+        /// <summary>Cloud ring renderers (read-only view, used by the atmosphere to find the cloud layer).</summary>
+        public Renderer[] CloudRenderers => cloudRenderers;
+
         /// <summary>Assigns the sky renderers (used by the demo-scene setup).</summary>
         public void SetSkyRenderers(Renderer[] sky, Renderer[] clouds, Renderer[] fogRings)
         {
@@ -165,12 +202,40 @@ namespace MedievalZen.Environment
             fogRingRenderers = fogRings ?? Array.Empty<Renderer>();
         }
 
+        /// <summary>
+        /// Multiplier on the passage of time (1 = one day per <c>WorldSettings.dayLengthMinutes</c>, 0 = time stands still).
+        /// Starts at the inspector value; the Journey menu's "Flow of time" sets it.
+        /// </summary>
+        public float TimeScale
+        {
+            get => timeScale;
+            set => timeScale = Mathf.Max(0f, value);
+        }
+
+        /// <summary>True while time stands still (<see cref="TimeScale"/> is 0).</summary>
+        public bool IsPaused => timeScale <= 0f;
+
         /// <summary>Jumps forward to <paramref name="hour"/> (the next day if it is earlier than now) and applies it at once.</summary>
         public void SetTime(float hour)
         {
             Clock.SetTime(hour);
             Apply();
             lastWholeHour = (int)Clock.Hour;
+            HourChanged?.Invoke(Clock.Hour);
+        }
+
+        /// <summary>
+        /// Sets the hour on the current day (the day counter never changes, whether <paramref name="hour"/> is earlier or
+        /// later than now) and applies it at once. Used by the Journey menu's time slider; <see cref="HourChanged"/> is raised
+        /// only when the whole hour changes, so dragging does not flood listeners.
+        /// </summary>
+        public void SetHourOfDay(float hour)
+        {
+            Clock.SetTime(hour, false);
+            Apply();
+            int whole = (int)Clock.Hour;
+            if (whole == lastWholeHour) return;
+            lastWholeHour = whole;
             HourChanged?.Invoke(Clock.Hour);
         }
 
@@ -192,6 +257,11 @@ namespace MedievalZen.Environment
         {
             WorldSettings settings = GameWorld.Current != null ? GameWorld.Current.Settings : null;
             if (settings != null) clock.DayLengthMinutes = settings.dayLengthMinutes;
+            else if (MedievalZen.Endless.EndlessWorld.Current != null && MedievalZen.Endless.EndlessWorld.Current.Settings != null)
+            {
+                clock.DayLengthMinutes = MedievalZen.Endless.EndlessWorld.Current.Settings.dayLengthMinutes;   // the endless road has no WorldSettings
+            }
+
             if (sun == null) sun = RenderSettings.sun;
             if (sun != null) RenderSettings.sun = sun;
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -220,15 +290,6 @@ namespace MedievalZen.Environment
 
         private void CaptureMaterialColours()
         {
-            cloudBase = new Color[cloudRenderers.Length];
-            cloudTop = new Color[cloudRenderers.Length];
-            for (int i = 0; i < cloudRenderers.Length; i++)
-            {
-                Material m = cloudRenderers[i] != null ? cloudRenderers[i].sharedMaterial : null;
-                cloudBase[i] = m != null && m.HasProperty(CloudBaseColorId) ? m.GetColor(CloudBaseColorId) : Color.white;
-                cloudTop[i] = m != null && m.HasProperty(TopColorId) ? m.GetColor(TopColorId) : Color.white;
-            }
-
             fogRingAlpha = new float[fogRingRenderers.Length];
             for (int i = 0; i < fogRingRenderers.Length; i++)
             {
@@ -243,6 +304,12 @@ namespace MedievalZen.Environment
             float t = hour / DayClock.HoursPerDay;
             float elevation = DayClock.SunElevation(hour, maxSunElevation);
             float azimuth = DayClock.SunAzimuth(hour) + azimuthOffset;
+            SunElevation = elevation;
+            {
+                bool up = elevation >= 0f;
+                Quaternion toLight = Quaternion.Euler(up ? elevation : -elevation, (up ? azimuth : azimuth + 180f) + 180f, 0f);
+                LightDirection = -(toLight * Vector3.forward);
+            }
 
             if (sun != null)
             {
@@ -257,7 +324,7 @@ namespace MedievalZen.Environment
                 float lightAzimuth = daytime ? azimuth : azimuth + 180f;
                 sun.transform.rotation = Quaternion.Euler(lightElevation, lightAzimuth + 180f, 0f);
                 sun.color = daytime ? sunColor.Evaluate(t) : moonColor;
-                sun.intensity = daytime ? sunIntensity * sunFactor : moonIntensity * moonFactor;
+                sun.intensity = (daytime ? sunIntensity * sunFactor : moonIntensity * moonFactor) * Mathf.Max(0f, SunIntensityMultiplier);
                 sun.enabled = sun.intensity > 0.001f;
             }
 
@@ -266,15 +333,20 @@ namespace MedievalZen.Environment
             RenderSettings.ambientGroundColor = Floor(ambientGround.Evaluate(t));
             RenderSettings.ambientLight = RenderSettings.ambientSkyColor;
 
-            Color fog = fogColor.Evaluate(t);
+            float overcast = Mathf.Clamp01(Overcast);
+            Color fog = OvercastBlend(fogColor.Evaluate(t), overcast, 0.95f);
+            CurrentFogColor = fog;
             RenderSettings.fogColor = fog;
-            float start = fogStart.Evaluate(hour);
-            RenderSettings.fogStartDistance = start;
-            RenderSettings.fogEndDistance = Mathf.Max(start + 10f, fogEnd.Evaluate(hour));
+            if (!ExternalFogDistances)
+            {
+                float start = fogStart.Evaluate(hour);
+                RenderSettings.fogStartDistance = start;
+                RenderSettings.fogEndDistance = Mathf.Max(start + 10f, fogEnd.Evaluate(hour));
+            }
 
             if (block == null) return;
-            Color top = skyTop.Evaluate(t);
-            Color bottom = skyBottom.Evaluate(t);
+            Color top = OvercastBlend(skyTop.Evaluate(t), overcast, 1.25f);
+            Color bottom = OvercastBlend(skyBottom.Evaluate(t), overcast, 0.85f);
             for (int i = 0; i < skyRenderers.Length; i++)
             {
                 Renderer r = skyRenderers[i];
@@ -285,14 +357,36 @@ namespace MedievalZen.Environment
                 r.SetPropertyBlock(block);
             }
 
-            Color tint = cloudTint.Evaluate(t);
-            for (int i = 0; i < cloudRenderers.Length && i < cloudBase.Length; i++)
+            // Clouds: derived from the atmosphere instead of multiplying Synty's saturated defaults. The shader's own fog
+            // branch is switched off (the colours already carry the haze and the fog pass adds the aerial perspective, so
+            // the clouds no longer depend on Unity's built-in fog) and its per-channel scattering is off unless the look
+            // asks for it.
+            CloudLookSettings look = CloudLook;
+            var input = new CloudLightInput
+            {
+                skyHorizon = bottom,
+                skyZenith = top,
+                fogColor = fog,
+                sunColor = sunColor.Evaluate(t),
+                moonColor = moonColor,
+                sunElevation = elevation,
+                overcast = overcast,
+                mist = CloudHaze,
+                tint = CloudTintMultiplier,
+            };
+            CloudColors clouds = CloudColorModel.Evaluate(input, look);
+            CurrentCloudColors = clouds;
+            for (int i = 0; i < cloudRenderers.Length; i++)
             {
                 Renderer r = cloudRenderers[i];
                 if (r == null) continue;
                 r.GetPropertyBlock(block);
-                block.SetColor(CloudBaseColorId, cloudBase[i] * tint);
-                block.SetColor(TopColorId, cloudTop[i] * tint);
+                block.SetColor(CloudBaseColorId, clouds.baseColor);
+                block.SetColor(TopColorId, clouds.topColor);
+                block.SetColor(CloudFresnelColorId, clouds.fresnelColor);
+                block.SetColor(CloudScatteringColorId, clouds.scatteringColor);
+                block.SetFloat(CloudEnableFogId, 0f);
+                block.SetFloat(CloudEnableScatteringId, look.scattering ? 1f : 0f);
                 r.SetPropertyBlock(block);
             }
 
@@ -304,6 +398,18 @@ namespace MedievalZen.Environment
                 block.SetColor(BaseColorId, new Color(fog.r, fog.g, fog.b, fogRingAlpha[i]));
                 r.SetPropertyBlock(block);
             }
+        }
+
+        /// <summary>
+        /// Moves <paramref name="c"/> toward a slightly cool grey of similar brightness (× <paramref name="brightness"/>) by
+        /// <paramref name="amount"/> × 0.85 — an overcast sky keeps a hint of the time-of-day colour.
+        /// </summary>
+        private static Color OvercastBlend(Color c, float amount, float brightness)
+        {
+            if (amount <= 0f) return c;
+            float lum = (0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) * brightness;
+            var grey = new Color(lum * 0.96f, lum * 0.98f, lum * 1.03f, c.a);
+            return Color.Lerp(c, grey, amount * 0.85f);
         }
 
         private Color Floor(Color c)

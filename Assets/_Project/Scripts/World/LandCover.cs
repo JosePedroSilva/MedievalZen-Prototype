@@ -39,8 +39,29 @@ namespace MedievalZen.World
         }
     }
 
+    /// <summary>Land-cover fields interpolated at one point (see <see cref="LandCover.Sample"/>).</summary>
+    public struct CoverSample
+    {
+        /// <summary>Terrain height (m).</summary>
+        public float height;
+        /// <summary>Slope, rise over run (1 = 45 degrees).</summary>
+        public float slope;
+        /// <summary>Highland weight 0..1.</summary>
+        public float highland;
+        /// <summary>Moisture 0 (dry) .. 1 (lush).</summary>
+        public float moisture;
+        /// <summary>Shore weight 0..1.</summary>
+        public float shore;
+        /// <summary>Scree weight 0..1 (gentler ground just below a cliff band).</summary>
+        public float scree;
+        /// <summary>Biome weights.</summary>
+        public BiomeWeights weights;
+        /// <summary>Below the lake level.</summary>
+        public bool isWater;
+    }
+
     /// <summary>
-    /// Per-texel land-cover fields on the alphamap grid (texel centres as in <see cref="RoadDistanceField"/>):
+    /// Per-texel land-cover fields on the land-cover grid (<see cref="WorldGenParams.CoverResolution"/>) (texel centres as in <see cref="RoadDistanceField"/>):
     /// height, slope, forest/highland/farm/moisture/shore weights. Built once after terrain shaping and shared by
     /// splat painting, detail density maps and prop scatter so they agree with each other.
     /// </summary>
@@ -66,6 +87,7 @@ namespace MedievalZen.World
             Farm = new float[count];
             Moisture = new float[count];
             Shore = new float[count];
+            Scree = new float[count];
         }
 
         /// <summary>Texels per side.</summary>
@@ -100,6 +122,12 @@ namespace MedievalZen.World
 
         /// <summary>Shore weight 0..1 just above the water line (0 under water and inland).</summary>
         public float[] Shore { get; }
+
+        /// <summary>
+        /// Scree weight 0..1: ground that is not itself a cliff (under ~33 degrees) but lies within ~16 m below a cliff band
+        /// (slope over ~40 degrees uphill), in the highlands. Painted as gravelly dirt with rock flecks.
+        /// </summary>
+        public float[] Scree { get; }
 
         /// <summary>Builds the fields for the (already shaped) <paramref name="relief"/>.</summary>
         public static LandCover Build(WorldGenParams p, Relief relief, IReadOnlyList<SettlementSite> sites, int resolution)
@@ -142,7 +170,7 @@ namespace MedievalZen.World
 
                     float n = forestNoise.Fbm(wx * 0.0032f, wz * 0.0032f, 4) + 0.2f * (moisture - 0.5f);
                     float forest = Smooth(threshold - 0.04f, threshold + 0.1f, n);
-                    forest *= 1f - Smooth(0.72f, 0.88f, hn);        // tree line
+                    forest *= 1f - Smooth(p.treeLine - 0.14f, p.treeLine - 0.02f, hn);   // tree line: woods thin out below it
                     forest *= 1f - Smooth(0.55f, 0.85f, slope);     // no forest on cliffs
                     forest *= 1f - 0.45f * highland;
                     cover.Forest[i] = forest;
@@ -168,7 +196,53 @@ namespace MedievalZen.World
                 }
             }
 
+            ComputeScree(cover, amplitude);
             return cover;
+        }
+
+        /// <summary>
+        /// Land cover whose fields the caller fills from its own sources (the endless world's region functions): every array
+        /// starts at 0. Call <see cref="ComputeScree(float)"/> once <see cref="Height"/>, <see cref="Slope"/> and
+        /// <see cref="Highland"/> are set. Texel centres as in <see cref="Build"/>.
+        /// </summary>
+        public static LandCover Create(int resolution, float worldSize, float waterHeight) => new LandCover(resolution, worldSize, waterHeight);
+
+        /// <summary>
+        /// Fills <see cref="Scree"/> as <see cref="Build"/> does (<paramref name="amplitude"/>: the height that counts as the top
+        /// of the relief).
+        /// </summary>
+        public void ComputeScree(float amplitude) => ComputeScree(this, Mathf.Max(1e-3f, amplitude));
+
+        /// <summary>Fills <see cref="Scree"/>: for each highland texel, the steepest slope 4-16 m straight uphill.</summary>
+        private static void ComputeScree(LandCover cover, float amplitude)
+        {
+            int res = cover.Resolution;
+            float texel = cover.TexelSize;
+            for (int z = 1; z < res - 1; z++)
+            {
+                for (int x = 1; x < res - 1; x++)
+                {
+                    int i = z * res + x;
+                    float hn = cover.Height[i] / amplitude;
+                    float high = Mathf.Max(cover.Highland[i], Smooth(0.4f, 0.55f, hn));
+                    if (high < 0.2f || cover.Slope[i] > 0.75f) continue;
+                    float gx = cover.Height[i + 1] - cover.Height[i - 1];
+                    float gz = cover.Height[i + res] - cover.Height[i - res];
+                    float g = Mathf.Sqrt(gx * gx + gz * gz);
+                    if (g < 1e-4f) continue;
+                    gx /= g;
+                    gz /= g;
+                    float above = 0f;
+                    for (float d = 4f; d <= 16f; d += 4f)
+                    {
+                        int tx = Mathf.Clamp((int)((x + 0.5f) + gx * d / texel), 0, res - 1);
+                        int tz = Mathf.Clamp((int)((z + 0.5f) + gz * d / texel), 0, res - 1);
+                        above = Mathf.Max(above, cover.Slope[tz * res + tx]);
+                    }
+
+                    cover.Scree[i] = high * Smooth(0.8f, 1.1f, above) * (1f - Smooth(0.5f, 0.75f, cover.Slope[i]));
+                }
+            }
         }
 
         /// <summary>Nearest texel index for world (x, z) (clamped).</summary>
@@ -178,6 +252,48 @@ namespace MedievalZen.World
             int tz = Mathf.Clamp((int)(z / TexelSize), 0, Resolution - 1);
             return tz * Resolution + tx;
         }
+
+        /// <summary>
+        /// Every field bilinearly interpolated at world (x, z) (texel centres as in <see cref="RoadDistanceField"/>), for
+        /// grids finer than this one (the splat). At a texel centre it returns that texel's values.
+        /// </summary>
+        public CoverSample Sample(float x, float z)
+        {
+            int last = Resolution - 1;
+            float gx = Mathf.Clamp(x / TexelSize - 0.5f, 0f, last);
+            float gz = Mathf.Clamp(z / TexelSize - 0.5f, 0f, last);
+            int x0 = Mathf.Max(0, Mathf.Min((int)gx, last - 1));
+            int z0 = Mathf.Max(0, Mathf.Min((int)gz, last - 1));
+            int x1 = Mathf.Min(x0 + 1, last);
+            int z1 = Mathf.Min(z0 + 1, last);
+            float tx = gx - x0;
+            float tz = gz - z0;
+            int i00 = z0 * Resolution + x0, i10 = z0 * Resolution + x1, i01 = z1 * Resolution + x0, i11 = z1 * Resolution + x1;
+            float w00 = (1f - tx) * (1f - tz), w10 = tx * (1f - tz), w01 = (1f - tx) * tz, w11 = tx * tz;
+
+            float Mix(float[] f) => f[i00] * w00 + f[i10] * w10 + f[i01] * w01 + f[i11] * w11;
+            BiomeWeights a = Weights(i00), b = Weights(i10), c = Weights(i01), d = Weights(i11);
+            var s = new CoverSample
+            {
+                height = Mix(Height),
+                slope = Mix(Slope),
+                highland = Mix(Highland),
+                moisture = Mix(Moisture),
+                shore = Mix(Shore),
+                scree = Mix(Scree),
+                weights = new BiomeWeights(
+                    a.meadow * w00 + b.meadow * w10 + c.meadow * w01 + d.meadow * w11,
+                    a.forest * w00 + b.forest * w10 + c.forest * w01 + d.forest * w11,
+                    a.highland * w00 + b.highland * w10 + c.highland * w01 + d.highland * w11,
+                    a.farm * w00 + b.farm * w10 + c.farm * w01 + d.farm * w11,
+                    a.shore * w00 + b.shore * w10 + c.shore * w01 + d.shore * w11),
+            };
+            s.isWater = WaterHeight > 0f && s.height < WaterHeight;
+            return s;
+        }
+
+        /// <summary>Slope (rise over run) bilinearly interpolated at world (x, z); what the splat's rock rule sees.</summary>
+        public float SampleSlope(float x, float z) => Sample(x, z).slope;
 
         /// <summary>True when texel <paramref name="i"/> is under water.</summary>
         public bool IsWater(int i) => WaterHeight > 0f && Height[i] < WaterHeight;
@@ -196,7 +312,8 @@ namespace MedievalZen.World
             return new BiomeWeights(open - highland, forest, highland, farm, Shore[i]);
         }
 
-        internal static float Smooth(float edge0, float edge1, float x)
+        /// <summary>Smoothstep of <paramref name="x"/> from <paramref name="edge0"/> (0) to <paramref name="edge1"/> (1).</summary>
+        public static float Smooth(float edge0, float edge1, float x)
         {
             float t = Mathf.Clamp01((x - edge0) / (edge1 - edge0));
             return t * t * (3f - 2f * t);

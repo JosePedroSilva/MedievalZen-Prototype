@@ -63,6 +63,28 @@ namespace MedievalZen.Travel
             return Distance - previous;
         }
 
+        /// <summary>
+        /// Moves forward in steps of <paramref name="step"/> metres while the point <paramref name="lookAhead"/> metres
+        /// ahead lies closer than <paramref name="minGap"/> to <paramref name="worldPosition"/> on the horizontal plane:
+        /// the body cut a sharp corner and reached the point it was steering for while its projection still sits on the
+        /// previous leg, which would leave it circling there. Never moves back, and stops once the look-ahead point is the
+        /// route end (arrival handles the last metres). Returns the metres advanced.
+        /// </summary>
+        public float AdvanceWhileLookAheadWithin(Vector3 worldPosition, float lookAhead, float minGap, float step = 0.2f)
+        {
+            if (step <= 0f || minGap <= 0f) return 0f;
+            float moved = 0f;
+            for (int i = 0; i < 512 && Distance + lookAhead < Route.TotalLength; i++)
+            {
+                Vector3 gap = LookAhead(lookAhead) - worldPosition;
+                gap.y = 0f;
+                if (gap.sqrMagnitude >= minGap * minGap) break;
+                moved += Advance(step);
+            }
+
+            return moved;
+        }
+
         /// <summary>Sets <see cref="Distance"/> directly (clamped to the route).</summary>
         public void SetDistance(float distance)
         {

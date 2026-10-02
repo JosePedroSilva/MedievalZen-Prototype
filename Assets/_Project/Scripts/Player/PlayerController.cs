@@ -34,7 +34,7 @@ namespace MedievalZen.Player
         [SerializeField, Range(0f, 1f), Tooltip("Movement input magnitude above this cancels auto-travel.")]
         private float cancelTravelThreshold = 0.2f;
 
-        [SerializeField, Min(0.1f), Tooltip("Body turn sharpness (1/s) towards the movement direction in third person.")]
+        [SerializeField, Min(0.1f), Tooltip("Body turn sharpness (1/s) towards the movement direction in third person (large turns are capped by the motor's max turn rate).")]
         private float thirdPersonTurnSpeed = 10f;
 
         [SerializeField, Min(0.1f), Tooltip("Body turn sharpness (1/s) towards the camera yaw in first person.")]
@@ -149,15 +149,17 @@ namespace MedievalZen.Player
 
             float scale = sprintAction.IsPressed() ? motor.SprintScale : 1f;
             if (InputOverride != null) scale *= InputOverride.MoveSpeedScale;
-            motor.Move(direction, scale);
 
             if (cameraRig != null && cameraRig.Mode == CameraMode.FirstPerson)
             {
+                // First person: the body follows the camera, the feet may strafe or back up.
+                motor.Move(direction, scale);
                 motor.Face(forward, firstPersonTurnSpeed);
             }
-            else if (direction.sqrMagnitude > 1e-4f)
+            else
             {
-                motor.Face(direction, thirdPersonTurnSpeed);
+                // Third person: the body turns towards the input and walks where it faces (no backwards sliding).
+                motor.MoveFacing(direction, scale, thirdPersonTurnSpeed);
             }
         }
 

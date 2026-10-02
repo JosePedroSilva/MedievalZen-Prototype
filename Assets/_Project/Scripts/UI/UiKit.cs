@@ -25,6 +25,7 @@ namespace MedievalZen.UI
         private static Sprite circle;
         private static Sprite ring;
         private static Sprite softRect;
+        private static Sprite softFrame;
 
         /// <summary>The built-in legacy runtime font.</summary>
         public static Font Font
@@ -44,6 +45,9 @@ namespace MedievalZen.UI
 
         /// <summary>A rounded-rectangle sprite with 9-slice borders, for panels.</summary>
         public static Sprite SoftRect => softRect != null ? softRect : softRect = MakeSoftRect();
+
+        /// <summary>A rounded-rectangle outline sprite with 9-slice borders (focus frames).</summary>
+        public static Sprite SoftFrame => softFrame != null ? softFrame : softFrame = MakeSoftRect(3f);
 
         /// <summary>Creates a child <see cref="RectTransform"/>.</summary>
         public static RectTransform CreateRect(string name, Transform parent)
@@ -146,11 +150,12 @@ namespace MedievalZen.UI
             return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
-        private static Sprite MakeSoftRect()
+        /// <summary>A filled rounded rectangle, or (<paramref name="lineWidth"/> &gt; 0) only its outline.</summary>
+        private static Sprite MakeSoftRect(float lineWidth = 0f)
         {
             const int size = 32;
             const float radius = 10f;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "UiSoftRect", wrapMode = TextureWrapMode.Clamp };
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = lineWidth > 0f ? "UiSoftFrame" : "UiSoftRect", wrapMode = TextureWrapMode.Clamp };
             var pixels = new Color32[size * size];
             for (int y = 0; y < size; y++)
             {
@@ -158,7 +163,15 @@ namespace MedievalZen.UI
                 {
                     float dx = Mathf.Max(0f, Mathf.Abs(x + 0.5f - size * 0.5f) - (size * 0.5f - radius));
                     float dy = Mathf.Max(0f, Mathf.Abs(y + 0.5f - size * 0.5f) - (size * 0.5f - radius));
-                    float a = Mathf.Clamp01(radius - Mathf.Sqrt(dx * dx + dy * dy));
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = Mathf.Clamp01(radius - d);
+                    if (lineWidth > 0f)
+                    {
+                        // Distance inside the edge (straight parts measure to the nearest side, corners to the arc).
+                        float inside = Mathf.Min(radius - d, Mathf.Min(Mathf.Min(x + 0.5f, size - x - 0.5f), Mathf.Min(y + 0.5f, size - y - 0.5f)));
+                        a *= Mathf.Clamp01(lineWidth + 0.5f - inside);
+                    }
+
                     pixels[y * size + x] = new Color32(255, 255, 255, (byte)(255f * a));
                 }
             }

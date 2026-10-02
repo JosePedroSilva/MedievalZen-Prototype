@@ -30,19 +30,26 @@ namespace MedievalZen.World
         public const string Stump = "Stump";
         /// <summary>Twigs (forest floor).</summary>
         public const string Twig = "Twig";
-        /// <summary>Single rocks.</summary>
+        /// <summary>Single rocks (Meadow boulders; the only single rocks used in the highlands).</summary>
         public const string Rock = "Rock";
+        /// <summary>Dark PolygonGeneric boulders, lowland meadows and shores only.</summary>
+        public const string LowlandRock = "LowlandRock";
         /// <summary>Small pebble piles.</summary>
         public const string RockSmallPile = "RockSmallPile";
         /// <summary>Rock piles.</summary>
         public const string RockPile = "RockPile";
         /// <summary>Flat rock outcrops in the highlands.</summary>
         public const string RockGround = "RockGround";
-        /// <summary>Rock faces on steep slopes.</summary>
+        /// <summary>Rock faces (Meadow cliff blocks) against steep slopes and above road cuts.</summary>
         public const string Cliff = "Cliff";
+        /// <summary>PolygonGeneric cliff faces (atlas-coloured); catalogued, not scattered.</summary>
+        public const string GenericCliff = "GenericCliff";
         /// <summary>Earthy cliff faces on lowland escarpments.</summary>
         public const string DirtCliff = "DirtCliff";
-        /// <summary>Large ground cliffs on the steepest slopes.</summary>
+        /// <summary>
+        /// Meadow <c>Ground_Cliff_Large</c>: a ~40 m raised mesa disc (top at the pivot, cliff skirt 4-8 m down all round).
+        /// Catalogued, not scattered: it only fits level ground and read as floating arches on slopes.
+        /// </summary>
         public const string GroundCliff = "GroundCliff";
         /// <summary>Large grassy ground mounds.</summary>
         public const string Mound = "Mound";
@@ -158,6 +165,17 @@ namespace MedievalZen.World
         public const string SunflowerDetail = "SunflowerDetail";
         /// <summary>Extra-colour flowers from the generic pack.</summary>
         public const string GenFlowers = "GenFlowers";
+
+        /// <summary>
+        /// True for rock-like families placed by <see cref="RockPlacer"/> (measured footprint, embedded in the ground, cliffs
+        /// backed by the slope) and checked again by the builder's safety net.
+        /// </summary>
+        public static bool IsRock(string family) =>
+            family == Rock || family == LowlandRock || family == RockSmallPile || family == RockPile || family == RockGround || family == Cliff ||
+            family == GenericCliff || family == DirtCliff || family == GroundCliff || family == Mound;
+
+        /// <summary>True for the cliff families (backing rule: a face needs higher ground behind it).</summary>
+        public static bool IsCliff(string family) => family == Cliff || family == GenericCliff || family == DirtCliff || family == GroundCliff;
 
         /// <summary>True for families realised as terrain tree instances rather than GameObjects.</summary>
         public static bool IsTree(string family) =>

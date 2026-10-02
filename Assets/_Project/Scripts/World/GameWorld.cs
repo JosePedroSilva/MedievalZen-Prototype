@@ -10,7 +10,7 @@ namespace MedievalZen.World
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-100)]
-    public sealed class GameWorld : MonoBehaviour
+    public sealed class GameWorld : MonoBehaviour, IWorldSurface
     {
         private const int GizmoCircleSegments = 48;
 
@@ -36,6 +36,7 @@ namespace MedievalZen.World
         private RoadNetworkData roadData = new RoadNetworkData();
 
         private RoadNetwork roads;
+        private IWorldSurface surfaceOverride;
 
         /// <summary>The active world in the loaded scene (set in Awake, cleared in OnDestroy).</summary>
         public static GameWorld Current { get; private set; }
@@ -93,6 +94,38 @@ namespace MedievalZen.World
             roadData = network != null ? RoadNetworkData.From(network) : new RoadNetworkData();
             roads = network;
         }
+
+        /// <summary>
+        /// What the atmosphere and ambience systems treat as the ground: this world's own terrain (the finite world), or the
+        /// surface a streamer supplied with <see cref="SetSurface"/> (the endless road).
+        /// </summary>
+        public IWorldSurface Surface => surfaceOverride ?? this;
+
+        /// <summary>Replaces <see cref="Surface"/> (null: back to this world's terrain). Runtime only, not saved.</summary>
+        public void SetSurface(IWorldSurface surface)
+        {
+            surfaceOverride = ReferenceEquals(surface, this) ? null : surface;
+        }
+
+        // ------------------------------------------------------------------ IWorldSurface over the baked terrain
+
+        /// <inheritdoc />
+        bool IWorldSurface.HasGround => terrain != null && terrain.terrainData != null;
+
+        /// <inheritdoc />
+        bool IWorldSurface.IsDynamic => false;
+
+        /// <inheritdoc />
+        float IWorldSurface.GroundHeight(Vector3 scenePosition) => TerrainSurface.Height(terrain, scenePosition);
+
+        /// <inheritdoc />
+        float IWorldSurface.WaterHeight(Vector3 scenePosition) => waterHeight;
+
+        /// <inheritdoc />
+        ITreeDensity IWorldSurface.CreateTreeDensity(float cellSize) => MedievalZen.Environment.TreeDensityGrid.FromTerrain(terrain, cellSize);
+
+        /// <inheritdoc />
+        bool IWorldSurface.TryGetFogBase(Vector3 scenePosition, out float altitude) => TerrainSurface.FogBase(terrain, waterHeight, out altitude);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()

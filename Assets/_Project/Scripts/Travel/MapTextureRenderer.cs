@@ -12,8 +12,8 @@ namespace MedievalZen.Travel
     /// Paints the parchment map of a generated world once (at scene start): paper with fibre noise, stains and darkened
     /// edges; a north-west hillshade and faint contour lines from the terrain heightmap; lakes as a blue-grey wash with an
     /// inked shoreline and ripple hatching; forests as a green wash with stippled tree dots from the terrain's tree density;
-    /// the roads in brown ink; settlement icons (town = ring with dot, village = small ring, inn = house) and a "^" for the
-    /// tallest peak; a double frame and a north arrow. Names are not rasterised here: the map overlay lays them out as text.
+    /// the roads in brown ink; settlement icons (town = ring with dot, village = small ring, inn = house), a "^" for the
+    /// tallest peak, ")(" for the mountain pass and a small rayed ring for the viewpoint; a double frame and a north arrow. Names are not rasterised here: the map overlay lays them out as text.
     /// </summary>
     public static class MapTextureRenderer
     {
@@ -367,14 +367,48 @@ namespace MedievalZen.Travel
             float scale = n / 1024f;
             foreach (Landmark landmark in landmarks)
             {
-                if (landmark.kind != LandmarkKind.Peak) continue;
                 Vector2 c = ToPixel(projection, landmark.position, n);
-                raster.MaskSegment(mask, c + new Vector2(-7f, -5f) * scale, c + new Vector2(0f, 6f) * scale, 1.3f * scale);
-                raster.MaskSegment(mask, c + new Vector2(0f, 6f) * scale, c + new Vector2(7f, -5f) * scale, 1.3f * scale);
-                raster.MaskSegment(mask, c + new Vector2(-3f, -5f) * scale, c + new Vector2(2f, 2f) * scale, 0.7f * scale);
+                switch (landmark.kind)
+                {
+                    case LandmarkKind.Peak:
+                        raster.MaskSegment(mask, c + new Vector2(-7f, -5f) * scale, c + new Vector2(0f, 6f) * scale, 1.3f * scale);
+                        raster.MaskSegment(mask, c + new Vector2(0f, 6f) * scale, c + new Vector2(7f, -5f) * scale, 1.3f * scale);
+                        raster.MaskSegment(mask, c + new Vector2(-3f, -5f) * scale, c + new Vector2(2f, 2f) * scale, 0.7f * scale);
+                        break;
+                    case LandmarkKind.Pass:
+                        // The cartographer's col sign: two arcs back to back, ")(".
+                        PassArc(raster, mask, c + new Vector2(-8.5f, 0f) * scale, 1f, scale);
+                        PassArc(raster, mask, c + new Vector2(8.5f, 0f) * scale, -1f, scale);
+                        break;
+                    case LandmarkKind.Viewpoint:
+                        // A small eye-like mark: a ring with short rays.
+                        raster.MaskRing(mask, c, 2.6f * scale, 1f * scale);
+                        for (int k = 0; k < 8; k++)
+                        {
+                            float a = k * Mathf.PI * 0.25f;
+                            var d = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                            raster.MaskSegment(mask, c + d * 4.5f * scale, c + d * 7.5f * scale, 0.75f * scale);
+                        }
+
+                        break;
+                }
             }
 
             raster.Composite(mask, InkBrown, 0.95f);
+        }
+
+        /// <summary>One bracket of the pass sign, bulging towards +x (<paramref name="facing"/> 1) or -x (-1), about 14 px tall at 1024 px.</summary>
+        private static void PassArc(MapRaster raster, float[] mask, Vector2 centre, float facing, float scale)
+        {
+            const int Pieces = 6;
+            Vector2 previous = default;
+            for (int i = 0; i <= Pieces; i++)
+            {
+                float a = Mathf.Lerp(-1.05f, 1.05f, i / (float)Pieces);
+                Vector2 point = centre + new Vector2(Mathf.Cos(a) * facing * 5f, Mathf.Sin(a) * 7.5f) * scale;
+                if (i > 0) raster.MaskSegment(mask, previous, point, 1.2f * scale);
+                previous = point;
+            }
         }
 
         private static void PaintFrame(MapRaster raster, float[] mask, MapProjection projection)

@@ -111,6 +111,14 @@ namespace MedievalZen.World
         public float scale;
         /// <summary>Owning settlement id, or -1 for countryside scatter.</summary>
         public int settlementId;
+        /// <summary>
+        /// Tilt about the local X axis in degrees (rocks leaning with the ground; 0 for everything upright). The builder rotates
+        /// by <c>Quaternion.Euler(pitch, yaw + yawOffset, roll)</c>, i.e. roll about Z, then pitch about X, then yaw about Y
+        /// (see <see cref="RockPlacer.Rotate"/>).
+        /// </summary>
+        public float pitch;
+        /// <summary>Tilt about the local Z axis in degrees (see <see cref="pitch"/>).</summary>
+        public float roll;
     }
 
     /// <summary>A rectangular crop field next to a settlement.</summary>

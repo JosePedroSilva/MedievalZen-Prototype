@@ -73,13 +73,21 @@ namespace MedievalZen.Travel
                 foreach (Landmark landmark in landmarks)
                 {
                     Vector2 uv = projection.WorldToMapUV(landmark.position);
-                    if (landmark.kind == LandmarkKind.Peak)
+                    switch (landmark.kind)
                     {
-                        Label($"Peak {landmark.name}", landmark.name, 20, FontStyle.Italic, UiKit.FadedInk, uv, new Vector2(12f, 4f), new Vector2(0f, 0.5f), 0f);
-                    }
-                    else
-                    {
-                        Label($"Lake {landmark.name}", landmark.name, 20, FontStyle.Italic, new Color(0.18f, 0.3f, 0.38f), uv, Vector2.zero, new Vector2(0.5f, 0.5f), -4f);
+                        case LandmarkKind.Peak:
+                            Label($"Peak {landmark.name}", landmark.name, 20, FontStyle.Italic, UiKit.FadedInk, uv, new Vector2(12f, 4f), new Vector2(0f, 0.5f), 0f);
+                            break;
+                        case LandmarkKind.Pass:
+                            // Above the ")(" sign, so it does not collide with the mountain inn's label below its icon.
+                            Label($"Pass {landmark.name}", landmark.name, 19, FontStyle.Italic, UiKit.FadedInk, uv, new Vector2(0f, 14f), new Vector2(0.5f, 0f), 0f);
+                            break;
+                        case LandmarkKind.Viewpoint:
+                            Label($"Viewpoint {landmark.name}", landmark.name, 17, FontStyle.Italic, UiKit.FadedInk, uv, new Vector2(12f, 0f), new Vector2(0f, 0.5f), 0f);
+                            break;
+                        default:
+                            Label($"Lake {landmark.name}", landmark.name, 20, FontStyle.Italic, new Color(0.18f, 0.3f, 0.38f), uv, Vector2.zero, new Vector2(0.5f, 0.5f), -4f);
+                            break;
                     }
                 }
             }

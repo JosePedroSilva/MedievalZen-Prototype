@@ -18,6 +18,9 @@ namespace MedievalZen.World
         /// <summary>Radius over which flatness (height standard deviation) is measured, in metres.</summary>
         public const float FlatnessRadius = 120f;
 
+        /// <summary>With a mountain inn, no town or village within this distance of the range's col (at most a fifth of the map), metres.</summary>
+        public const float ColKeepOut = 400f;
+
         /// <summary>Metres of height standard deviation traded per settlement-spacing of distance to the nearest pick.</summary>
         private const float SpreadWeight = 1.5f;
 
@@ -41,8 +44,8 @@ namespace MedievalZen.World
         }
 
         /// <summary>
-        /// Places towns and villages using <paramref name="names"/>. Sites stay clear of water; when there are two or
-        /// more villages the last one is placed in the highlands (the flattest spot there) if one exists.
+        /// Places towns and villages using <paramref name="names"/>. Sites stay clear of water (and, with a mountain inn, of the
+        /// col); when there are two or more villages the last one is placed in the highlands (the flattest spot there) if one exists.
         /// </summary>
         public static List<SettlementSite> Place(WorldGenParams p, Relief relief, SettlementNames names)
         {
@@ -71,6 +74,9 @@ namespace MedievalZen.World
                     : HeightStdDev(heightmap, p, c, FlatnessRadius) + edgePenalty;
                 highland[i] = relief.Mask.Evaluate(c.x, c.y);
                 order[i] = i;
+
+                // The col and its shelves belong to the mountain inn and the pass road.
+                if (p.mountainInn && Vector2.Distance(c, relief.Mask.Range.Saddle) < Mathf.Min(ColKeepOut, size * 0.2f)) scores[i] = float.PositiveInfinity;
             }
 
             System.Array.Sort(order, (a, b) =>

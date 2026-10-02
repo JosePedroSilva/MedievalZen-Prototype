@@ -4,10 +4,12 @@ namespace MedievalZen.Player
 {
     /// <summary>
     /// The single locomotion path of the player: a <see cref="CharacterController"/> driven by whoever
-    /// is in charge this frame (manual input or the auto-traveller). Drivers call <see cref="Move"/>
-    /// (and optionally <see cref="Face"/>) once per frame from <c>Update</c>; the motor applies the
-    /// movement afterwards (it runs late in the frame via <see cref="DefaultExecutionOrder"/>).
-    /// If nobody calls <see cref="Move"/> in a frame, the motor eases to a stop.
+    /// is in charge this frame (manual input or the auto-traveller). Drivers call once per frame from <c>Update</c>
+    /// either <see cref="MoveFacing"/> (third person, auto-travel: the body turns towards the request at a bounded
+    /// rate and walks where it faces, never sliding backwards) or <see cref="Move"/> + <see cref="Face"/> (first person:
+    /// velocity free to strafe, yaw set separately). The motor applies the movement afterwards (it runs late in the
+    /// frame via <see cref="DefaultExecutionOrder"/>); the maths lives in <see cref="MotorMath"/>.
+    /// If nobody asks in a frame, the motor eases to a stop along its current heading.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     [DisallowMultipleComponent]
@@ -21,11 +23,30 @@ namespace MedievalZen.Player
         [SerializeField, Min(1f), Tooltip("Speed scale drivers pass while sprinting (walk speed x this).")]
         private float sprintScale = 2.2f;
 
-        [SerializeField, Min(0.01f), Tooltip("How quickly the planar velocity builds up towards the requested velocity, in m/s^2.")]
+        [SerializeField, Min(0.01f), Tooltip("How quickly the speed builds up towards the requested speed, in m/s^2.")]
         private float acceleration = 5f;
 
-        [SerializeField, Min(0.01f), Tooltip("How quickly the planar velocity drops when input stops or turns away, in m/s^2.")]
+        [SerializeField, Min(0.01f), Tooltip("How quickly the speed drops when input stops or points away, in m/s^2.")]
         private float deceleration = 6f;
+
+        [Header("Direction changes")]
+        [SerializeField, Min(10f), Tooltip("Face-movement (third person, auto-travel): fastest body turn in degrees per second. Small corrections ease in with the driver's sharpness; large ones pivot at this rate.")]
+        private float maxTurnRate = 300f;
+
+        [SerializeField, Range(0f, 180f), Tooltip("Face-movement: a request up to this many degrees off the facing keeps full speed.")]
+        private float fullSpeedAngle = 35f;
+
+        [SerializeField, Range(0f, 180f), Tooltip("Face-movement: a request this many degrees or more off the facing asks for zero speed, so a reversal eases off and pivots instead of sliding backwards.")]
+        private float zeroSpeedAngle = 155f;
+
+        [SerializeField, Min(10f), Tooltip("Face-movement: degrees per second at which the velocity swings round to the body's forward (kept above the max turn rate).")]
+        private float velocityTurnRate = 720f;
+
+        [SerializeField, Min(10f), Tooltip("Strafe (first person): degrees per second at which the velocity swings towards a new direction.")]
+        private float strafeTurnRate = 540f;
+
+        [SerializeField, Range(90f, 180f), Tooltip("Strafe: a new direction further than this from the current velocity brakes and restarts instead of swinging round.")]
+        private float strafeReverseAngle = 125f;
 
         [Header("Gravity & ground")]
         [SerializeField, Tooltip("Gravity acceleration in m/s^2 (negative = down).")]
@@ -44,10 +65,12 @@ namespace MedievalZen.Player
         private LayerMask groundLayers = ~0;
 
         private CharacterController controller;
-        private Vector3 requestedVelocity;
-        private Vector3 planarVelocity;
+        private Vector2 requestedVelocity;     // planar (x, z) m/s for this frame
+        private bool hasRequest;
+        private MoveStyle requestStyle = MoveStyle.FaceMovement;
+        private float requestTurnSharpness = 10f;
+        private MotorState state;
         private float verticalSpeed;
-        private float yaw;
 
         /// <summary>Walking speed in m/s at full input.</summary>
         public float WalkSpeed => walkSpeed;
@@ -64,44 +87,86 @@ namespace MedievalZen.Player
         /// <summary>True when the capsule touched the ground during the last movement step.</summary>
         public bool IsGrounded { get; private set; }
 
-        /// <summary>Current body yaw in degrees.</summary>
-        public float Yaw => yaw;
+        /// <summary>Current body yaw in degrees, (-180, 180].</summary>
+        public float Yaw => state.Yaw;
 
         /// <summary>Unit forward vector of the body on the horizontal plane.</summary>
-        public Vector3 Forward => Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+        public Vector3 Forward
+        {
+            get
+            {
+                Vector2 forward = MotorMath.FromYaw(state.Yaw);
+                return new Vector3(forward.x, 0f, forward.y);
+            }
+        }
 
         /// <summary>
-        /// Requests planar movement for this frame. <paramref name="worldDirection"/> is flattened onto
-        /// the horizontal plane; its magnitude (clamped to 0..1) is the fraction of walk speed.
+        /// Horizontal velocity of the last movement step in body space (m/s): x = rightwards, y = forwards. What the
+        /// animation should show: negative y is a backward step, x a sidestep.
+        /// </summary>
+        public Vector2 LocalPlanarVelocity => MotorMath.LocalVelocity(new Vector2(Velocity.x, Velocity.z), state.Yaw);
+
+        /// <summary>The direction-change tuning currently in use.</summary>
+        public MotorTuning Tuning => new MotorTuning
+        {
+            Acceleration = acceleration,
+            Deceleration = deceleration,
+            MaxTurnRate = maxTurnRate,
+            FullSpeedAngle = fullSpeedAngle,
+            ZeroSpeedAngle = Mathf.Max(fullSpeedAngle + 1f, zeroSpeedAngle),
+            VelocityTurnRate = Mathf.Max(velocityTurnRate, maxTurnRate + 60f),
+            StrafeTurnRate = strafeTurnRate,
+            StrafeReverseAngle = strafeReverseAngle,
+        };
+
+        /// <summary>
+        /// Strafe-style request for this frame (first person): the velocity steers towards <paramref name="worldDirection"/>
+        /// (flattened; magnitude clamped to 0..1 = fraction of walk speed) while the facing is left to <see cref="Face"/>.
         /// <paramref name="speedScale"/> multiplies the walk speed (1 = walk, <see cref="SprintScale"/> = sprint).
-        /// Call once per frame; the last call in a frame wins.
+        /// Call once per frame; the last Move/MoveFacing call in a frame wins.
         /// </summary>
         public void Move(Vector3 worldDirection, float speedScale = 1f)
         {
-            worldDirection.y = 0f;
-            float magnitude = worldDirection.magnitude;
-            if (magnitude > 1f)
-            {
-                worldDirection /= magnitude;
-            }
+            Request(worldDirection, speedScale, MoveStyle.Strafe, requestTurnSharpness);
+        }
 
-            requestedVelocity = worldDirection * (walkSpeed * Mathf.Max(0f, speedScale));
+        /// <summary>
+        /// Face-movement request for this frame (third person, auto-travel): the body turns towards
+        /// <paramref name="worldDirection"/> (exponentially with <paramref name="turnSharpness"/>, 1/s, for small changes;
+        /// at most the motor's max turn rate for large ones) and walks where it faces, slowing while the request is far
+        /// off its facing. Magnitude and <paramref name="speedScale"/> as in <see cref="Move"/>. A zero direction keeps the
+        /// facing and eases to a stop. Call once per frame; the last Move/MoveFacing call in a frame wins.
+        /// </summary>
+        public void MoveFacing(Vector3 worldDirection, float speedScale, float turnSharpness)
+        {
+            Request(worldDirection, speedScale, MoveStyle.FaceMovement, turnSharpness);
+        }
+
+        private void Request(Vector3 worldDirection, float speedScale, MoveStyle style, float turnSharpness)
+        {
+            var planar = new Vector2(worldDirection.x, worldDirection.z);
+            float magnitude = planar.magnitude;
+            if (magnitude > 1f) planar /= magnitude;
+
+            requestedVelocity = planar * (walkSpeed * Mathf.Max(0f, speedScale));
+            requestStyle = style;
+            requestTurnSharpness = Mathf.Max(0f, turnSharpness);
+            hasRequest = true;
         }
 
         /// <summary>
         /// Smoothly turns the body towards <paramref name="direction"/> (flattened; ignored when near zero).
         /// <paramref name="turnSpeed"/> is an exponential sharpness in 1/s: about 5 is relaxed, 20+ near-instant.
+        /// Meant for strafe-style movement (first person); <see cref="MoveFacing"/> turns the body itself.
         /// Call every frame the body should keep turning.
         /// </summary>
         public void Face(Vector3 direction, float turnSpeed)
         {
-            direction.y = 0f;
-            if (direction.sqrMagnitude < 1e-6f) return;
+            var planar = new Vector2(direction.x, direction.z);
+            if (planar.sqrMagnitude < 1e-6f) return;
 
-            float target = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg;
-            float t = 1f - Mathf.Exp(-Mathf.Max(0f, turnSpeed) * Time.deltaTime);
-            yaw = Mathf.LerpAngle(yaw, target, t);
-            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            state.Yaw = MotorMath.FollowYaw(state.Yaw, MotorMath.YawOf(planar), turnSpeed, Time.deltaTime);
+            transform.rotation = Quaternion.Euler(0f, state.Yaw, 0f);
         }
 
         /// <summary>Moves the body instantly (ignoring collisions) and resets its velocity.</summary>
@@ -110,12 +175,12 @@ namespace MedievalZen.Player
             EnsureController();
             bool wasEnabled = controller.enabled;
             controller.enabled = false;
-            yaw = yawDegrees;
-            transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+            state = new MotorState { Yaw = LocomotionMath.WrapAngle(yawDegrees) };
+            transform.SetPositionAndRotation(position, Quaternion.Euler(0f, state.Yaw, 0f));
             controller.enabled = wasEnabled;
 
-            requestedVelocity = Vector3.zero;
-            planarVelocity = Vector3.zero;
+            requestedVelocity = Vector2.zero;
+            hasRequest = false;
             verticalSpeed = 0f;
             Velocity = Vector3.zero;
             Physics.SyncTransforms();
@@ -125,7 +190,7 @@ namespace MedievalZen.Player
         {
             EnsureController();
             controller.slopeLimit = slopeLimit;
-            yaw = transform.eulerAngles.y;
+            state.Yaw = LocomotionMath.WrapAngle(transform.eulerAngles.y);
         }
 
         private void OnValidate()
@@ -143,11 +208,27 @@ namespace MedievalZen.Player
             float dt = Time.deltaTime;
             if (dt <= 0f || !controller.enabled) return;
 
-            // Planar velocity eases towards the request: gentle starts and stops, no snapping.
-            bool speedingUp = Vector3.Dot(requestedVelocity, planarVelocity) >= 0f
-                              && requestedVelocity.sqrMagnitude >= planarVelocity.sqrMagnitude;
-            planarVelocity = Vector3.MoveTowards(planarVelocity, requestedVelocity, (speedingUp ? acceleration : deceleration) * dt);
-            requestedVelocity = Vector3.zero;   // consumed: a driver must ask again next frame
+            // Facing and velocity advance together (MotorMath): face-movement turns the body and walks where it faces;
+            // strafe steers the velocity only. Without a request this frame the body eases to a stop along its heading.
+            MotorTuning tuning = Tuning;
+            if (!hasRequest)
+            {
+                state.Velocity = MotorMath.SteerVelocity(state.Velocity, Vector2.zero, 0f, 0f, 180f, tuning.Acceleration, tuning.Deceleration, dt);
+            }
+            else if (requestStyle == MoveStyle.FaceMovement)
+            {
+                float previousYaw = state.Yaw;
+                MotorMath.StepFaceMovement(ref state, requestedVelocity, requestTurnSharpness, tuning, dt);
+                if (state.Yaw != previousYaw) transform.rotation = Quaternion.Euler(0f, state.Yaw, 0f);
+            }
+            else
+            {
+                MotorMath.StepStrafe(ref state, requestedVelocity, tuning, dt);
+            }
+
+            requestedVelocity = Vector2.zero;   // consumed: a driver must ask again next frame
+            hasRequest = false;
+            var planarVelocity = new Vector3(state.Velocity.x, 0f, state.Velocity.y);
 
             bool wasGrounded = controller.isGrounded;
             if (wasGrounded && verticalSpeed <= 0f)

@@ -22,6 +22,9 @@ namespace MedievalZen.World
         /// <summary>Number of circles added.</summary>
         public int Count => circles.Count;
 
+        /// <summary>Circle <paramref name="index"/> in insertion order as (x, radius, z).</summary>
+        public Vector3 Circle(int index) => circles[index];
+
         /// <summary>Adds a circle.</summary>
         public void Add(Vector3 center, float radius)
         {

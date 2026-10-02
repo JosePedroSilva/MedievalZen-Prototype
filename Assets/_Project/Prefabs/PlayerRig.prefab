@@ -139,6 +139,7 @@ GameObject:
   - component: {fileID: 5167367942822125615}
   - component: {fileID: 7901791873349262642}
   - component: {fileID: 1343150737393285145}
+  - component: {fileID: 1062248980266417510}
   m_Layer: 0
   m_Name: PlayerRig
   m_TagString: Untagged
@@ -205,6 +206,12 @@ MonoBehaviour:
   sprintScale: 2.2
   acceleration: 5
   deceleration: 6
+  maxTurnRate: 300
+  fullSpeedAngle: 35
+  zeroSpeedAngle: 155
+  velocityTurnRate: 720
+  strafeTurnRate: 540
+  strafeReverseAngle: 125
   gravity: -19.6
   groundStickSpeed: 2
   groundSnapDistance: 0.45
@@ -270,6 +277,9 @@ MonoBehaviour:
   turnSpeed: 4
   arrivalSlowdown: 2
   arrivalTolerance: 0.4
+  approachArrivalDistance: 1
+  stuckSpeed: 0.2
+  stuckSeconds: 3
 --- !u!114 &7901791873349262642
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -282,7 +292,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 47cc4c6db4ff7a94e8de6d4b3d322c6f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MedievalZen::MedievalZen.Travel.PlayerTravel
-  maxDistanceFromRoad: 25
+  maxApproachDistance: 60
+  approachThreshold: 3
   clearDestinationOnArrival: 1
   logEvents: 1
 --- !u!114 &1343150737393285145
@@ -304,6 +315,41 @@ MonoBehaviour:
   cancelTravelThreshold: 0.2
   thirdPersonTurnSpeed: 10
   firstPersonTurnSpeed: 25
+--- !u!114 &1062248980266417510
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3581697474546812441}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4a6137a90c15e941b9fc77d6bf1ee69, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MedievalZen::MedievalZen.Player.PlayerAnimator
+  animator: {fileID: 1453931128663912616}
+  cameraRig: {fileID: 5739744675269830961}
+  visual: {fileID: 2137135266303111983}
+  groundOffset: 0
+  compensateSkinWidth: 1
+  speedDamping: 0.12
+  inclineDamping: 0.3
+  lookDamping: 0.35
+  leanDamping: 0.4
+  turnDamping: 0.15
+  maxLookYaw: 70
+  giveUpLookYaw: 135
+  maxLookPitch: 35
+  bodyShare: 0.35
+  thirdPersonNeutralPitch: 8
+  mapLookPitch: -22
+  fullLeanAcceleration: 3
+  turnInPlaceInFirstPerson: 0
+  maxIncline: 25
+  groundLayers:
+    serializedVersion: 2
+    m_Bits: 51
+  fallDelay: 0.25
 --- !u!1 &4810593235951985618
 GameObject:
   m_ObjectHideFlags: 0
@@ -375,9 +421,33 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2137135266303111983}
     m_Modifications:
+    - target: {fileID: 355344183341799007, guid: 89e401adace34884084d47323dfed9fc, type: 3}
+      propertyPath: m_Avatar
+      value: 
+      objectReference: {fileID: 9000000, guid: 8342a1430918eb749abe787ccef4537a, type: 2}
+    - target: {fileID: 355344183341799007, guid: 89e401adace34884084d47323dfed9fc, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 619e137e0e6bcef4e98dcf697bc5f7b3, type: 2}
+    - target: {fileID: 355344183341799007, guid: 89e401adace34884084d47323dfed9fc, type: 3}
+      propertyPath: m_CullingMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 355344183341799007, guid: 89e401adace34884084d47323dfed9fc, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3755277747141990492, guid: 89e401adace34884084d47323dfed9fc, type: 3}
       propertyPath: m_Name
       value: SM_Gen_Chr_Peasent_Male_01
+      objectReference: {fileID: 0}
+    - target: {fileID: 4340690015890189794, guid: 89e401adace34884084d47323dfed9fc, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.5785476
+      objectReference: {fileID: 0}
+    - target: {fileID: 4340690015890189794, guid: 89e401adace34884084d47323dfed9fc, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0.35251343
       objectReference: {fileID: 0}
     - target: {fileID: 6476465594022878517, guid: 89e401adace34884084d47323dfed9fc, type: 3}
       propertyPath: m_LocalPosition.x
@@ -385,7 +455,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6476465594022878517, guid: 89e401adace34884084d47323dfed9fc, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.093715906
+      value: 0.0033153577
       objectReference: {fileID: 0}
     - target: {fileID: 6476465594022878517, guid: 89e401adace34884084d47323dfed9fc, type: 3}
       propertyPath: m_LocalPosition.z
@@ -424,6 +494,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 89e401adace34884084d47323dfed9fc, type: 3}
+--- !u!95 &1453931128663912616 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 355344183341799007, guid: 89e401adace34884084d47323dfed9fc, type: 3}
+  m_PrefabInstance: {fileID: 1207819082661095159}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &5269790090568547266 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6476465594022878517, guid: 89e401adace34884084d47323dfed9fc, type: 3}

@@ -6,9 +6,9 @@ using UnityEngine;
 namespace MedievalZen.Travel
 {
     /// <summary>
-    /// "Walking on autopilot": follows a <see cref="RoadRoute"/> by feeding <see cref="PlayerMotor.Move"/>
-    /// and <see cref="PlayerMotor.Face"/> each frame, exactly like manual input does. The camera stays
-    /// free to look around; the body faces the road, not the camera.
+    /// "Walking on autopilot": follows a <see cref="RoadRoute"/> by feeding <see cref="PlayerMotor.MoveFacing"/>
+    /// each frame, exactly like third-person manual input does (the body turns towards the road ahead at a bounded
+    /// rate and walks where it faces). The camera stays free to look around; the body faces the road, not the camera.
     /// </summary>
     [RequireComponent(typeof(PlayerMotor))]
     [DisallowMultipleComponent]
@@ -33,7 +33,7 @@ namespace MedievalZen.Travel
         [SerializeField, Min(0f), Tooltip("Minimum seconds between two resyncs.")]
         private float reprojectInterval = 0.5f;
 
-        [SerializeField, Min(0.1f), Tooltip("Body turn sharpness (1/s) while travelling.")]
+        [SerializeField, Min(0.1f), Tooltip("Body turn sharpness (1/s) while travelling (large turns are capped by the motor's max turn rate).")]
         private float turnSpeed = 4f;
 
         [SerializeField, Min(0.1f), Tooltip("Ease off over this many metres before the destination.")]
@@ -127,6 +127,21 @@ namespace MedievalZen.Travel
             Started?.Invoke(route);
         }
 
+        /// <summary>
+        /// Swaps the route of an ongoing trip for <paramref name="route"/> (the same journey in a rebuilt road network) without
+        /// raising <see cref="Started"/> and without resetting the pace variation or the stuck detector, so the walk carries on
+        /// seamlessly. <paramref name="originDelta"/> is how far every scene position just moved (floating-origin shift), applied
+        /// to the off-road approach target. Does nothing when inactive.
+        /// </summary>
+        public void ContinueOn(RoadRoute route, Vector3 originDelta)
+        {
+            if (route == null) throw new ArgumentNullException(nameof(route));
+            if (follower == null) return;
+            follower = new RouteFollower(route);
+            follower.Reproject(transform.position);
+            if (approaching) approachTarget += originDelta;
+        }
+
         /// <summary>Stops travelling (the body eases to a halt). Does nothing when inactive.</summary>
         public void Cancel()
         {
@@ -187,8 +202,7 @@ namespace MedievalZen.Travel
                 if (gap > approachArrivalDistance)
                 {
                     Vector3 heading = toRoad / gap;
-                    motor.Move(heading, travelSpeed / Mathf.Max(0.01f, motor.WalkSpeed));
-                    motor.Face(heading, turnSpeed);
+                    motor.MoveFacing(heading, travelSpeed / Mathf.Max(0.01f, motor.WalkSpeed), turnSpeed);
                     return;
                 }
 
@@ -201,6 +215,10 @@ namespace MedievalZen.Travel
             Vector3 offset = Flatten(body - follower.Position);
             float ahead = Vector3.Dot(offset, Flatten(follower.Tangent));
             if (ahead > 0f) follower.Advance(ahead);
+
+            // At a hairpin the body can cut the corner and reach the point it steers for while still "behind" on the
+            // first leg; move the route point on so the steering target stays ahead instead of circling on the spot.
+            follower.AdvanceWhileLookAheadWithin(body, lookAhead, lookAhead * 0.5f);
 
             // Pushed off the road or snagged: resync to the nearest point of the route (rate-limited).
             if (Time.time >= nextReprojectTime && Flatten(body - follower.Position).sqrMagnitude > reprojectDistance * reprojectDistance)
@@ -233,8 +251,7 @@ namespace MedievalZen.Travel
             float speed = travelSpeed * (1f + speedVariation * Mathf.Sin(phase));
             float ease = Mathf.Clamp(Mathf.Min(follower.Remaining, toEnd.magnitude) / arrivalSlowdown, 0.35f, 1f);
 
-            motor.Move(steer, speed * ease / Mathf.Max(0.01f, motor.WalkSpeed));
-            motor.Face(steer, turnSpeed);
+            motor.MoveFacing(steer, speed * ease / Mathf.Max(0.01f, motor.WalkSpeed), turnSpeed);
         }
 
         private static Vector3 Flatten(Vector3 v)

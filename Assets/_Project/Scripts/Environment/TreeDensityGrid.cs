@@ -1,4 +1,5 @@
 using System;
+using MedievalZen.World;
 using UnityEngine;
 
 namespace MedievalZen.Environment
@@ -7,7 +8,7 @@ namespace MedievalZen.Environment
     /// Coarse grid of tree counts over a square area, sampled as trees per 100 m² (bilinear). Built once from a Terrain's
     /// tree instances; used by the ambient FX spawner (meadow vs forest) and the map renderer (forest stipple).
     /// </summary>
-    public sealed class TreeDensityGrid
+    public sealed class TreeDensityGrid : ITreeDensity
     {
         private readonly float[] counts;
         private readonly float originX;

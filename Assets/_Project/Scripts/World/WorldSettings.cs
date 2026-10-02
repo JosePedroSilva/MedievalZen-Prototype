@@ -52,10 +52,10 @@ namespace MedievalZen.World
         [Tooltip("If on, the seed picks which side or corner of the map the highlands occupy; otherwise Mountain Mask Centre is used.")]
         public bool randomiseMountainSide = true;
 
-        [Tooltip("Centre of the highland region in normalised map coordinates (0..1), used when Randomise Mountain Side is off.")]
+        [Tooltip("Where the mountain range rises, in normalised map coordinates (0..1), used when Randomise Mountain Side is off. Its main ridge runs from here towards the map centre.")]
         public Vector2 mountainMaskCentre = new Vector2(0.8f, 0.8f);
 
-        [Tooltip("Radius of the highland region as a fraction of the map size.")]
+        [Tooltip("Size of the mountain range as a fraction of the map size: its main ridge runs about 0.95 × this × map size from the highland side towards the centre.")]
         [Range(0.05f, 1.5f)]
         public float mountainMaskRadius = 0.6f;
 
@@ -70,6 +70,26 @@ namespace MedievalZen.World
         [Tooltip("Height of the occasional steep escarpments, in metres before scaling (0 = none).")]
         [Range(0f, 80f)]
         public float escarpmentHeight = 25f;
+
+        [Header("Mountain range and pass")]
+        [Tooltip("Crest height of the col between the two central summits, as a fraction of Mountain Amplitude. The pass road crosses the range there and the mountain inn stands beside it.")]
+        [Range(0.35f, 0.9f)]
+        public float passHeight = 0.76f;
+
+        [Tooltip("How deeply drainage valleys are carved into the highlands (0 = none, 1 = deep ravines).")]
+        [Range(0f, 1f)]
+        public float valleyCarving = 0.5f;
+
+        [Tooltip("Fraction of the total relief above which no broadleaf trees grow; pines thin out above it and give way to rock and dry grass.")]
+        [Range(0.4f, 1f)]
+        public float treeLine = 0.7f;
+
+        [Tooltip("Place a mountain inn beside the pass, linked to the lowland roads by grade-limited pass roads (in addition to Inn Count).")]
+        public bool mountainInn = true;
+
+        [Tooltip("Design grade (rise over run) of the pass road: switchbacks are laid out so it never climbs steeper. 0.12 = 12 %.")]
+        [Range(0.05f, 0.16f)]
+        public float maxRoadGrade = 0.12f;
 
         [Header("Water")]
         [Tooltip("Fraction of the map below the lake water level (0 = no lakes).")]

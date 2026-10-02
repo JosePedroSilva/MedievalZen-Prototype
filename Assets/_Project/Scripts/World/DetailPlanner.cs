@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -117,30 +118,54 @@ namespace MedievalZen.World
         public static List<DetailLayer> Plan(WorldGenParams p, RoadDistanceField roads, LandCover cover, float[,,] splat,
             IReadOnlyList<SettlementSite> sites, IReadOnlyList<FieldPatch> fields, PaletteKeys keys, IReadOnlyList<DetailRule> rules)
         {
+            return Plan(p, roads, cover, splat, sites, fields, keys, rules, 0, cover.Resolution);
+        }
+
+        /// <summary>
+        /// <see cref="Plan(WorldGenParams, RoadDistanceField, LandCover, float[,,], IReadOnlyList{SettlementSite}, IReadOnlyList{FieldPatch}, PaletteKeys, IReadOnlyList{DetailRule})"/>
+        /// for the square of <paramref name="count"/>² land-cover cells starting at cell (<paramref name="offset"/>,
+        /// <paramref name="offset"/>) of <paramref name="cover"/> (whose grid <paramref name="roads"/> shares); <paramref name="splat"/>
+        /// and the returned density maps cover only that square. In a window of an endless world (<see cref="WorldGenParams.window"/>)
+        /// patch noise and the per-cell dither use absolute positions, so neighbouring tiles continue each other.
+        /// </summary>
+        public static List<DetailLayer> Plan(WorldGenParams p, RoadDistanceField roads, LandCover cover, float[,,] splat,
+            IReadOnlyList<SettlementSite> sites, IReadOnlyList<FieldPatch> fields, PaletteKeys keys, IReadOnlyList<DetailRule> rules,
+            int offset, int count)
+        {
             int res = cover.Resolution;
             float texel = cover.TexelSize;
             float half = p.roadWidth * 0.5f;
             var layers = new List<DetailLayer>();
+            TileWindow window = p.window;
+            float ox = p.NoiseOriginX;
+            float oz = p.NoiseOriginZ;
+            long cellX0 = 0, cellZ0 = 0;
+            if (window != null)
+            {
+                cellX0 = (long)Math.Round(window.originX / texel) + offset;
+                cellZ0 = (long)Math.Round(window.originZ / texel) + offset;
+            }
 
             // Per-texel "can grow" mask shared by every rule: 0 on water, rock, dirt, settlement centres and fields.
-            var grow = new float[res * res];
-            var weights = new BiomeWeights[res * res];
-            var dryness = new float[res * res];
-            for (int z = 0; z < res; z++)
+            var grow = new float[count * count];
+            var weights = new BiomeWeights[count * count];
+            var dryness = new float[count * count];
+            for (int z = 0; z < count; z++)
             {
-                float wz = (z + 0.5f) * texel;
-                for (int x = 0; x < res; x++)
+                float wz = (z + offset + 0.5f) * texel;
+                for (int x = 0; x < count; x++)
                 {
-                    float wx = (x + 0.5f) * texel;
-                    int i = z * res + x;
-                    if (cover.IsWater(i)) continue;
+                    float wx = (x + offset + 0.5f) * texel;
+                    int i = z * count + x;
+                    int ci = (z + offset) * res + x + offset;
+                    if (cover.IsWater(ci)) continue;
                     float g = (1f - splat[z, x, TerrainShaper.DirtLayer]) * (1f - splat[z, x, TerrainShaper.RockLayer])
                               * (1f - splat[z, x, TerrainShaper.CobbleLayer]) * (1f - 0.6f * splat[z, x, TerrainShaper.MudLayer]);
                     if (g < 0.05f) continue;
                     if (ScatterPlanner.InsideField(fields, wx, wz, 0.5f)) continue;
                     if (ScatterPlanner.InsideSettlement(sites, wx, wz, -8f)) g *= 0.25f;
                     grow[i] = g;
-                    weights[i] = cover.Weights(i);
+                    weights[i] = cover.Weights(ci);
                     dryness[i] = splat[z, x, TerrainShaper.DryGrassLayer] - splat[z, x, TerrainShaper.LushGrassLayer];
                 }
             }
@@ -153,7 +178,7 @@ namespace MedievalZen.World
                 var familyLayers = new DetailLayer[variants];
                 for (int v = 0; v < variants; v++)
                 {
-                    familyLayers[v] = new DetailLayer { family = rule.family, variant = v, density = new byte[res * res] };
+                    familyLayers[v] = new DetailLayer { family = rule.family, variant = v, density = new byte[count * count] };
                     layers.Add(familyLayers[v]);
                 }
 
@@ -161,31 +186,32 @@ namespace MedievalZen.World
                 float frequency = 1f / Mathf.Max(1f, rule.patchSize);
                 float clearance = half + rule.roadMargin;
                 uint salt = (uint)(r + 1) * 0x9E3779B9u;
-                for (int z = 0; z < res; z++)
+                for (int z = 0; z < count; z++)
                 {
-                    float wz = (z + 0.5f) * texel;
-                    for (int x = 0; x < res; x++)
+                    float wz = (z + offset + 0.5f) * texel;
+                    for (int x = 0; x < count; x++)
                     {
-                        int i = z * res + x;
+                        int i = z * count + x;
                         float g = grow[i];
                         if (g <= 0f) continue;
-                        float roadDistance = roads[x, z];
+                        float roadDistance = roads[x + offset, z + offset];
                         if (roadDistance < clearance) continue;
+                        int ci = (z + offset) * res + x + offset;
                         float affinity = weights[i].Dot(rule.biomes);
                         if (affinity <= 0.01f) continue;
-                        float wx = (x + 0.5f) * texel;
-                        float n = patchNoise.Fbm(wx * frequency, wz * frequency, 2);
+                        float wx = (x + offset + 0.5f) * texel;
+                        float n = patchNoise.Fbm((wx + ox) * frequency, (wz + oz) * frequency, 2);
                         float patch = Mathf.Clamp01((n - rule.patchThreshold) * 3f + 0.5f);
                         if (patch <= 0f) continue;
                         float dry = 1f + rule.dryAffinity * dryness[i];
                         float roadFade = Mathf.Lerp(RoadFadeMin, 1f, (roadDistance - clearance) / RoadFadeWidth);
                         float expected = rule.perCell * affinity * patch * g * Mathf.Max(0f, dry) * roadFade;
-                        uint h = Hash((uint)i ^ salt);
+                        uint h = window == null ? Hash((uint)ci ^ salt) : TileWindow.CellHash(cellX0 + x, cellZ0 + z, salt);
                         float dither = (h & 0xFFFF) / 65536f;
-                        int count = (int)(expected + dither);
-                        if (count <= 0) continue;
+                        int count2 = (int)(expected + dither);
+                        if (count2 <= 0) continue;
                         int variant = variants > 1 ? (int)((h >> 16) % (uint)variants) : 0;
-                        familyLayers[variant].density[i] = (byte)Mathf.Min(255, count);
+                        familyLayers[variant].density[i] = (byte)Mathf.Min(255, count2);
                     }
                 }
             }

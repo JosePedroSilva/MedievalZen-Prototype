@@ -104,6 +104,7 @@ namespace MedievalZen.Player
         private float framingShoulder;
         private float framingPivotRaise;
         private float framingBlendDuration = 0.5f;
+        private float lookSensitivityScale = 1f;
 
         /// <summary>Raised after <see cref="Mode"/> changes.</summary>
         public event Action<CameraMode> ModeChanged;
@@ -129,6 +130,23 @@ namespace MedievalZen.Player
         /// <summary>Whether the cursor is currently locked by this rig (look input is active).</summary>
         public bool CursorLocked { get; private set; }
 
+        /// <summary>
+        /// Player preference multiplying both the mouse and the stick sensitivity (1 = the inspector values). Set by the
+        /// Journey menu's "Look speed"; clamped to 0.1..5.
+        /// </summary>
+        public float LookSensitivityScale
+        {
+            get => lookSensitivityScale;
+            set => lookSensitivityScale = Mathf.Clamp(value, 0.1f, 5f);
+        }
+
+        /// <summary>Invert vertical look (starts at the inspector value).</summary>
+        public bool InvertY
+        {
+            get => invertY;
+            set => invertY = value;
+        }
+
         /// <summary>Switches between first and third person with a smooth blend.</summary>
         public void Toggle()
         {
@@ -150,7 +168,7 @@ namespace MedievalZen.Player
         /// </summary>
         public void AddLook(Vector2 input, bool isPointerDelta)
         {
-            Vector2 degrees = isPointerDelta ? input * mouseSensitivity : input * (stickSensitivity * Time.deltaTime);
+            Vector2 degrees = (isPointerDelta ? input * mouseSensitivity : input * (stickSensitivity * Time.deltaTime)) * lookSensitivityScale;
             targetYaw += degrees.x;
             targetPitch = Mathf.Clamp(targetPitch + (invertY ? degrees.y : -degrees.y), minPitch, maxPitch);
         }

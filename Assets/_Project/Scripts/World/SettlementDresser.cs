@@ -12,13 +12,25 @@ namespace MedievalZen.World
     {
         private const float CabinFootprint = 5.5f;
 
-        /// <summary>Dresses every settlement of <paramref name="network"/>.</summary>
+        /// <summary>Stump-family variants that are logs (SyntyCatalog order: Stump 1-3, Log 1-2, Root 1-2).</summary>
+        private static readonly int[] LogVariants = { 3, 4 };
+
+        /// <summary>
+        /// Dresses every settlement of <paramref name="network"/>; settlement <paramref name="mountainInnId"/> (if any) is
+        /// dressed as a high refuge instead of a roadside inn.
+        /// </summary>
         public static void Dress(WorldGenParams p, float[,] map, RoadNetwork network, RoadDistanceField roads, PaletteKeys keys,
-            OccupancyMap occupancy, List<PropPlacement> props)
+            OccupancyMap occupancy, List<PropPlacement> props, int mountainInnId = -1)
         {
             foreach (Settlement settlement in network.Settlements)
             {
                 var ctx = new Context(p, map, roads, keys, occupancy, props, settlement);
+                if (settlement.Id == mountainInnId)
+                {
+                    DressMountainInn(ctx);
+                    continue;
+                }
+
                 switch (settlement.Type)
                 {
                     case SettlementType.Inn: DressInn(ctx); break;
@@ -88,6 +100,99 @@ namespace MedievalZen.World
             for (int i = 0; i < pieces; i++)
             {
                 ctx.TryPlace(PropRole.Fence, start + road * ((i + 0.5f) * length), ScatterPlanner.Yaw(road), 0.8f, half + 1.5f);
+            }
+        }
+
+        /// <summary>
+        /// A refuge at the pass: the stone cabin in the widest gap between the roads, a curved dry-stone wall behind it as a
+        /// windbreak, a fire with a cooking tripod, a hitch and a sign by the road, stacked firewood against the cabin, a few
+        /// barrels and crates, and a cairn across the road. No well, no fences, no fields.
+        /// </summary>
+        private static void DressMountainInn(Context ctx)
+        {
+            Vector3 c = ctx.Center;
+            Vector3 gap = ctx.LargestGap();
+            float gapAngle = Mathf.Atan2(gap.z, gap.x);
+            float half = ctx.HalfRoad;
+            Vector3 cabin = Vector3.zero;
+            bool placed = false;
+            float[] turns = { 0f, 0.35f, -0.35f, 0.7f, -0.7f, 1.05f, -1.05f };
+            foreach (float radius in new[] { 14f, 18f, 11f })
+            {
+                foreach (float turn in turns)
+                {
+                    Vector3 pos = c + Dir(gapAngle + turn) * radius;
+                    if (ctx.TryPlace(PropRole.Cabin, pos, ScatterPlanner.Yaw(c - pos), CabinFootprint, half + 1.5f))
+                    {
+                        cabin = pos;
+                        placed = true;
+                        break;
+                    }
+                }
+
+                if (placed) break;
+            }
+
+            if (!placed) return;
+            Vector3 outward = cabin - c;
+            outward.y = 0f;
+            outward = outward.sqrMagnitude > 0.01f ? outward.normalized : gap;
+            var tangent = new Vector3(-outward.z, 0f, outward.x);
+
+            // Windbreak: a dry-stone wall arc behind the cabin.
+            if (ctx.Keys.Has(PropRole.StoneWall))
+            {
+                float length = Mathf.Max(0.5f, ctx.Keys.wallLength);
+                const float WallRadius = 8.5f;
+                float step = length / WallRadius;
+                float centreAngle = Mathf.Atan2(outward.z, outward.x);
+                const int Pieces = 5;
+                for (int k = 0; k < Pieces; k++)
+                {
+                    float a = centreAngle + (k - (Pieces - 1) * 0.5f) * step;
+                    Vector3 pos = cabin + Dir(a) * WallRadius;
+                    var along = new Vector3(-Mathf.Sin(a), 0f, Mathf.Cos(a));
+                    bool end = k == 0 || k == Pieces - 1;
+                    string piece = end && ctx.Keys.Has(PropRole.StoneWallSmall) ? PropRole.StoneWallSmall : PropRole.StoneWall;
+                    if (ctx.TryPlace(piece, pos, ScatterPlanner.Yaw(along), length * 0.4f, half + 2f) && end)
+                    {
+                        float sign = k == 0 ? -1f : 1f;
+                        ctx.ForcePlaceNoFootprint(PropRole.StoneWallPillar, pos + along * (sign * length * 0.5f), ScatterPlanner.Yaw(along));
+                    }
+                }
+            }
+
+            // Fire with a tripod in front of the cabin, off to one side.
+            Vector3 fire = cabin - outward * 7f + tangent * 5f;
+            if (ctx.TryPlace(PropRole.Fireplace, fire, 0f, 1.5f, half + 2f)) ctx.ForcePlaceNoFootprint(PropRole.FireTripod, fire, (float)(ctx.Rng.NextDouble() * 360.0));
+
+            // Firewood stacked against the cabin, a few goods by the door.
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 log = cabin - tangent * (4.2f + 0.2f * i) + outward * (1.2f * i - 1.2f);
+                ctx.TryPlaceVariant(PropRole.Stump, LogVariants[i % LogVariants.Length], log, ScatterPlanner.Yaw(outward) + 90f, 0.5f, half + 1.5f);
+            }
+
+            ScatterGoods(ctx, cabin + tangent * 4.5f - outward * 2f, 3, 2.2f);
+            ctx.TryPlace(PropRole.Crate, cabin + tangent * 3.5f - outward * 4.5f, (float)(ctx.Rng.NextDouble() * 360.0), 0.8f, half + 1.5f);
+
+            // Hitch and sign facing the road; a cairn across the road.
+            Vector3 road = ctx.RoadDirections.Count > 0 ? ctx.RoadDirections[0] : tangent;
+            var roadSide = new Vector3(road.z, 0f, -road.x);
+            if (Vector3.Dot(roadSide, outward) < 0f) roadSide = -roadSide;
+            foreach (float offset in new[] { 9f, -9f, 14f, -14f })
+            {
+                if (ctx.TryPlace(PropRole.HorseHitch, c + roadSide * (half + 4.5f) + road * offset, ScatterPlanner.Yaw(road), 1.4f, half + 0.5f)) break;
+            }
+
+            foreach (float offset in new[] { 6f, -6f, 11f })
+            {
+                if (ctx.TryPlace(PropRole.Sign, c + roadSide * (half + 3f) + road * offset, ScatterPlanner.Yaw(-roadSide), 0.6f, half + 0.5f)) break;
+            }
+
+            foreach (float offset in new[] { 4f, -4f, 10f, -10f })
+            {
+                if (ctx.TryPlaceScaled(PropRole.StoneStack, c - roadSide * (half + 4f) + road * offset, (float)(ctx.Rng.NextDouble() * 360.0), 0.6f, 1.3f, half + 1f)) break;
             }
         }
 
@@ -326,6 +431,48 @@ namespace MedievalZen.World
                 if (occupancy.Overlaps(pos.x, pos.z, footprint)) return false;
                 ForcePlace(role, pos, yaw, footprint);
                 return true;
+            }
+
+            /// <summary><see cref="TryPlace"/> with an explicit variant (e.g. logs out of the stump family).</summary>
+            public bool TryPlaceVariant(string role, int variant, Vector3 pos, float yaw, float footprint, float roadClearance)
+            {
+                if (!Keys.Has(role) || variant >= Keys.Count(role)) return TryPlace(role, pos, yaw, footprint, roadClearance);
+                if (!Clear(pos, footprint, roadClearance)) return false;
+                Add(role, variant, pos, yaw, 1f, footprint);
+                return true;
+            }
+
+            /// <summary><see cref="TryPlace"/> with a scale.</summary>
+            public bool TryPlaceScaled(string role, Vector3 pos, float yaw, float scale, float footprint, float roadClearance)
+            {
+                if (!Keys.Has(role) || !Clear(pos, footprint, roadClearance)) return false;
+                Add(role, Keys.PickVariant(role, Rng), pos, yaw, scale, footprint);
+                return true;
+            }
+
+            private bool Clear(Vector3 pos, float footprint, float roadClearance)
+            {
+                if (pos.x < footprint || pos.z < footprint || pos.x > p.worldSize - footprint || pos.z > p.worldSize - footprint) return false;
+                return roads.IsClear(pos.x, pos.z, roadClearance + footprint) && !occupancy.Overlaps(pos.x, pos.z, footprint);
+            }
+
+            private void Add(string role, int variant, Vector3 pos, float yaw, float scale, float footprint)
+            {
+                pos.y = HeightmapGenerator.SampleHeight(map, p, pos.x, pos.z);
+                occupancy.Add(pos, footprint);
+                if (role == PropRole.StoneStack || role == PropRole.StonePile || PropRole.IsRock(role))
+                {
+                    // Measured stone pieces are seated on the ground under their whole footprint (no gap at a disc edge).
+                    if (Keys.TryGetMetrics(role, variant, out _))
+                    {
+                        if (!RockPlacer.TrySeat(new RockPlacer.Context(p, map, Keys, null), role, variant, pos.x, pos.z, yaw, scale, out PropPlacement seated)) return;
+                        seated.settlementId = Settlement.Id;
+                        props.Add(seated);
+                        return;
+                    }
+                }
+
+                props.Add(new PropPlacement { role = role, variant = variant, position = pos, yaw = yaw, scale = scale, settlementId = Settlement.Id });
             }
 
             /// <summary>Places without clearance checks or a footprint (pieces that sit on/against another prop).</summary>

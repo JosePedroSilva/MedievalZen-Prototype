@@ -85,6 +85,7 @@ namespace MedievalZen.Travel
         private int hovered = -1;
         private string hoverPrompt;
         private float nextRouteRefresh;
+        private bool noMapOfThisRoad;
 
         /// <summary>True while the map is held up (or rising).</summary>
         public bool IsOpen { get; private set; }
@@ -137,6 +138,14 @@ namespace MedievalZen.Travel
         /// <summary>Opens or closes the map.</summary>
         public void Toggle()
         {
+            if (noMapOfThisRoad)
+            {
+                // The endless road has no parchment yet (a strip map is a later phase).
+                HudController hud = HudController.Instance;
+                if (hud != null) hud.ShowToast("There is no map of this road yet");
+                return;
+            }
+
             if (IsOpen) Close();
             else Open();
         }
@@ -202,6 +211,12 @@ namespace MedievalZen.Travel
 
         private void Start()
         {
+            if (MedievalZen.Endless.EndlessWorld.Current != null)
+            {
+                noMapOfThisRoad = true;
+                return;
+            }
+
             GameWorld world = GameWorld.Current;
             Camera view = cameraRig != null ? cameraRig.Camera : GetComponentInChildren<Camera>();
             if (world == null || view == null)

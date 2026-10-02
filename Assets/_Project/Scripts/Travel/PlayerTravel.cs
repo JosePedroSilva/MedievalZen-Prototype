@@ -6,6 +6,21 @@ using UnityEngine;
 namespace MedievalZen.Travel
 {
     /// <summary>
+    /// Chooses where auto-travel goes when the player presses the auto-travel key, instead of the finite world's rule
+    /// (the destination picked on the map or a signpost). The endless road supplies one: the next inn in the direction the
+    /// traveller faces.
+    /// </summary>
+    public interface ITravelDestinationPicker
+    {
+        /// <summary>
+        /// The settlement to travel to from where <paramref name="travel"/>'s player stands (in the network of
+        /// <c>GameWorld.Current</c>, which the picker may refresh first), or null with a player-facing
+        /// <paramref name="notice"/> explaining why there is none.
+        /// </summary>
+        Settlement PickDestination(PlayerTravel travel, out string notice);
+    }
+
+    /// <summary>
     /// The player's travel state: the chosen destination and starting/stopping auto-travel towards it
     /// along the roads of <see cref="GameWorld.Current"/>.
     /// </summary>
@@ -44,6 +59,47 @@ namespace MedievalZen.Travel
 
         /// <summary>The auto-traveller this component drives.</summary>
         public AutoTraveller Traveller => traveller;
+
+        /// <summary>
+        /// When set (the endless road), every start of auto-travel asks it for the destination; when null (the finite world)
+        /// the chosen <see cref="Destination"/> is used as before.
+        /// </summary>
+        public ITravelDestinationPicker DestinationPicker { get; set; }
+
+        /// <summary>
+        /// Keeps an ongoing trip going after the road network was replaced (the endless road's sliding window, or a floating-
+        /// origin shift that moved everything by <paramref name="originDelta"/>): re-routes to <paramref name="destination"/>
+        /// (the same place in the new network) and hands the route to the auto-traveller without stopping or announcing
+        /// anything. When not travelling, only the destination reference is updated. Returns false (and stops) when the new
+        /// network has no route.
+        /// </summary>
+        public bool ContinueTravel(Settlement destination, Vector3 originDelta)
+        {
+            if (destination != Destination)
+            {
+                Destination = destination;
+                DestinationChanged?.Invoke(destination);
+            }
+
+            if (!IsTravelling || destination == null) return destination != null;
+            RoadNetwork roads = GameWorld.Current != null ? GameWorld.Current.Roads : null;
+            if (roads == null || roads.Segments.Count == 0)
+            {
+                Cancel();
+                return false;
+            }
+
+            RoadLocation start = roads.Project(transform.position);
+            if (!roads.TryFindRoute(start, destination, out RoadRoute route))
+            {
+                if (logEvents) Debug.LogWarning($"Auto-travel: lost the way to {destination.Name} when the road ahead was refreshed.", this);
+                Cancel();
+                return false;
+            }
+
+            traveller.ContinueOn(route, originDelta);
+            return true;
+        }
 
         /// <summary>
         /// Chooses where to travel. While auto-travelling, the route is recomputed towards the new
@@ -101,6 +157,22 @@ namespace MedievalZen.Travel
 
         private bool StartTravel()
         {
+            if (DestinationPicker != null)
+            {
+                Settlement picked = DestinationPicker.PickDestination(this, out string notice);
+                if (picked == null)
+                {
+                    if (!string.IsNullOrEmpty(notice)) Notice?.Invoke(notice);
+                    return false;
+                }
+
+                if (picked != Destination)
+                {
+                    Destination = picked;
+                    DestinationChanged?.Invoke(picked);
+                }
+            }
+
             RoadNetwork roads = GameWorld.Current != null ? GameWorld.Current.Roads : null;
             if (roads == null || roads.Segments.Count == 0)
             {

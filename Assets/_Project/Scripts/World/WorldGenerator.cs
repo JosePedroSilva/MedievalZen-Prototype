@@ -27,7 +27,7 @@ namespace MedievalZen.World
             keys ??= PaletteKeys.Default;
             var bp = new WorldBlueprint { Params = p };
             var clock = new Stopwatch();
-            const int StageCount = 12;
+            const int StageCount = 13;
             int stageIndex = 0;
 
             void Begin(string stage)
@@ -54,23 +54,38 @@ namespace MedievalZen.World
             var names = new SettlementNames(p.seed + 7);
             List<SettlementSite> sites = SettlementPlacer.Place(p, relief, names);
             bp.Landmarks = LandmarkFinder.Find(relief, names);
+            PassRecord pass = MountainPassPlanner.PlaceInn(p, relief, sites, names);
+            bp.Pass = pass;
             End("Settlements");
 
             Begin("Road routing");
-            RoadPlan plan = RoadPlanner.Plan(p, relief, sites, names);
+            RoadPlan plan = RoadPlanner.Plan(p, relief, sites, names, pass?.InnSite ?? -1);
             bp.RoadPlan = plan;
             bp.Settlements = plan.Settlements;
             End("Road routing");
+
+            Begin("Pass road");
+            MountainPassPlanner.RelayoutSteepRoads(p, relief, plan);
+            MountainPassPlanner.RouteRoads(p, relief, plan, pass);
+            End("Pass road");
 
             Begin("Terrain shaping");
             TerrainShaper.FlattenSettlements(map, p, plan.Settlements);
             List<Vector3[]> profiles = RoadPlanner.ComputeProfiles(plan, p, map, out float[] nodeHeights);
             TerrainShaper.CarveRoads(map, p, profiles);
             bp.Roads = RoadPlanner.BuildNetwork(plan, profiles, nodeHeights);
+            if (pass != null)
+            {
+                for (int i = 0; i < plan.Segments.Count; i++)
+                {
+                    if (plan.Segments[i].Pass) pass.SegmentIds.Add(i);
+                }
+            }
+
             End("Terrain shaping");
 
             Begin("Road distance field");
-            int res = p.AlphamapResolution;
+            int res = p.CoverResolution;   // land-cover / scatter / detail grid (the splat may be finer)
             float maxDistance = Mathf.Max(30f, p.ScatterCorridor + 12f);
             bp.RoadDistance = RoadDistanceField.Build(TerrainShaper.CenterLines(bp.Roads), res, p.worldSize, maxDistance);
             End("Road distance field");
@@ -81,7 +96,7 @@ namespace MedievalZen.World
 
             var occupancy = new OccupancyMap(p.worldSize);
             Begin("Settlement dressing");
-            SettlementDresser.Dress(p, map, bp.Roads, bp.RoadDistance, keys, occupancy, bp.Props);
+            SettlementDresser.Dress(p, map, bp.Roads, bp.RoadDistance, keys, occupancy, bp.Props, pass != null ? pass.InnSite : -1);
             bp.Signposts = SignpostPlanner.Plan(p, map, bp.Roads, keys, occupancy);
             End("Settlement dressing");
 
@@ -90,21 +105,32 @@ namespace MedievalZen.World
             End("Fields");
 
             Begin("Splat");
-            bp.Splat = TerrainShaper.ComputeSplat(p, bp.RoadDistance, bp.Cover, plan.Settlements, bp.Fields);
+            // The splat is finer than the land-cover grid (1 m vs 2 m texels on the default map): give it an exact road
+            // distance field at its own resolution so the road edge is crisp; biome fields are interpolated.
+            RoadDistanceField splatRoads = p.AlphamapResolution == res ? bp.RoadDistance
+                : RoadDistanceField.Build(TerrainShaper.CenterLines(bp.Roads), p.AlphamapResolution, p.worldSize, maxDistance);
+            bp.Splat = TerrainShaper.ComputeSplat(p, splatRoads, bp.Cover, plan.Settlements, bp.Fields);
             End("Splat");
 
             Begin("Features");
-            ScatterPlanner.PlaceFeatures(p, map, bp.Roads, bp.RoadDistance, bp.Cover, plan.Settlements, bp.Fields, bp.Landmarks, occupancy, keys, bp.Props);
+            if (pass != null && pass.InnSite >= 0)
+            {
+                ScatterPlanner.PlacePassFeatures(p, map, bp.Roads, bp.RoadDistance, bp.Cover, plan.Settlements, bp.Fields, occupancy, keys, bp.Props,
+                    pass, names, bp.Landmarks);
+            }
+
+            ScatterPlanner.PlaceFeatures(p, map, bp.Roads, bp.RoadDistance, bp.Cover, plan.Settlements, bp.Fields, bp.Landmarks, occupancy, keys, bp.Props, pass);
             bp.Horizon = HorizonPlanner.Plan(p, relief, keys);
             End("Features");
 
             Begin("Scatter");
-            ScatterPlanner.Scatter(p, map, bp.RoadDistance, bp.Cover, plan.Settlements, bp.Fields, occupancy, keys, ScatterRules.Default(), bp.Trees, bp.Props);
+            ScatterPlanner.Scatter(p, map, bp.RoadDistance, bp.Cover, plan.Settlements, bp.Fields, occupancy, keys, ScatterRules.Default(p.treeLine), bp.Trees, bp.Props);
             End("Scatter");
 
             Begin("Details");
             bp.DetailResolution = res;
-            bp.DetailLayers = DetailPlanner.Plan(p, bp.RoadDistance, bp.Cover, bp.Splat, plan.Settlements, bp.Fields, keys, DetailPlanner.DefaultRules());
+            float[,,] coverSplat = TerrainShaper.Resample(bp.Splat, res);   // same array when the resolutions match
+            bp.DetailLayers = DetailPlanner.Plan(p, bp.RoadDistance, bp.Cover, coverSplat, plan.Settlements, bp.Fields, keys, DetailPlanner.DefaultRules());
             End("Details");
 
             progress?.Invoke("Done", 1f);

@@ -62,11 +62,16 @@ namespace MedievalZen.World
             (PropRole.Shrub, Range(GenEnv + "Shrub_", 1, 3).Concat(Range(GenEnv + "Fern_", 1, 3))),
             (PropRole.Stump, Range(GenEnv + "Stump_", 1, 3).Concat(Range(GenEnv + "Log_", 1, 2)).Concat(Range(GenEnv + "Root_", 1, 2))),
             (PropRole.Twig, Range(GenEnv + "Twig_", 1, 4)),
-            (PropRole.Rock, Range(Env + "Rock_", 1, 6).Concat(new[] { Env + "Rock_Round_01.prefab", Env + "Rock_Small_01.prefab" }).Concat(Range(GenEnv + "Rock_", 1, 10))),
+            // Rocks and cliffs: the Meadow pieces share one look (Rock_Grass_Triplanar_Meadow_01: RockWall texture with grass on
+            // top) and are the only ones used in the highlands; the dark atlas-coloured PolygonGeneric rocks stay in the lowland
+            // (LowlandRock) and the Generic cliffs are catalogued but not scattered (GenericCliff).
+            (PropRole.Rock, Range(Env + "Rock_", 1, 6).Concat(new[] { Env + "Rock_Round_01.prefab", Env + "Rock_Small_01.prefab" })),
+            (PropRole.LowlandRock, Range(GenEnv + "Rock_", 1, 10)),
             (PropRole.RockSmallPile, Range(Env + "Rock_Small_Pile_", 1, 2)),
             (PropRole.RockPile, Range(Env + "Rock_Pile_", 1, 7)),
             (PropRole.RockGround, Range(Env + "Rock_Ground_", 1, 2)),
-            (PropRole.Cliff, Range(Env + "Rock_Cliff_", 1, 3).Concat(Range(GenEnv + "Cliff_", 1, 4))),
+            (PropRole.Cliff, Range(Env + "Rock_Cliff_", 1, 3)),
+            (PropRole.GenericCliff, Range(GenEnv + "Cliff_", 1, 4)),
             (PropRole.DirtCliff, Range(GenEnv + "Dirt_Cliff_", 1, 8)),
             (PropRole.GroundCliff, Range(Env + "Ground_Cliff_Large_", 1, 2)),
             (PropRole.Mound, Range(Env + "Ground_Mound_Large_", 1, 4)),
@@ -135,13 +140,35 @@ namespace MedievalZen.World
             (PropRole.GenFlowers, Range(GenEnv + "Flowers_", 1, 8)),
         };
 
-        /// <summary>Terrain layer assets shipped with the pack, in splat order (see <see cref="TerrainShaper"/> layer constants).</summary>
+        /// <summary>
+        /// First-party terrain layer painted on steep slopes: the Meadow <c>RockWall</c> texture and normals, i.e. the same
+        /// texture the Meadow rock and cliff meshes show on their sides (<c>Rock_Grass_Triplanar_Meadow_01</c>), so painted rock
+        /// and rock meshes match. Created by the palette menu (never hand-written).
+        /// </summary>
+        public const string RockWallLayer = "Assets/_Project/Settings/TerrainLayers/RockWall.terrainlayer";
+
+        /// <summary>Diffuse texture of <see cref="RockWallLayer"/>.</summary>
+        public const string RockWallTexture = TerrainFolder + "RockWall_Texture_01.png";
+
+        /// <summary>Normal map of <see cref="RockWallLayer"/>.</summary>
+        public const string RockWallNormals = TerrainFolder + "RockWall_Normals_01.png";
+
+        /// <summary>
+        /// Tile size (m) of <see cref="RockWallLayer"/>: the Meadow triplanar rock material samples world position × 0.2
+        /// (<c>_Triplanar_Tiling_Side</c> 20 × the shader's 0.01), i.e. one texture repeat every 5 m.
+        /// </summary>
+        public const float RockWallTileSize = 5f;
+
+        /// <summary>Synty rock layer used when <see cref="RockWallLayer"/> cannot be created.</summary>
+        public const string RockFallbackLayer = TerrainFolder + "Terrain_Meadow_Rock_Rough_01.terrainlayer";
+
+        /// <summary>Terrain layer assets in splat order (see <see cref="TerrainShaper"/> layer constants).</summary>
         public static readonly string[] TerrainLayers =
         {
             TerrainFolder + "Terrain_Meadow_Grass_01.terrainlayer",         // 0 lush lowland grass
             TerrainFolder + "Terrain_Meadow_Grass_02.terrainlayer",         // 1 dry / upland grass
-            TerrainFolder + "Terrain_Meadow_Dirt_01.terrainlayer",          // 2 roads, settlement discs, tilled fields
-            TerrainFolder + "Terrain_Meadow_Rock_Rough_01.terrainlayer",    // 3 steep slopes, ridgelines
+            TerrainFolder + "Terrain_Meadow_Dirt_01.terrainlayer",          // 2 roads, settlement discs, tilled fields, scree
+            RockWallLayer,                                                  // 3 steep slopes, cliff bands, ridgelines
             TerrainFolder + "Terrain_Meadow_Grass_Leaves_01.terrainlayer",  // 4 forest floor
             TerrainFolder + "Terrain_Meadow_Grass_Flowers_01.terrainlayer", // 5 flowery meadow patches
             TerrainFolder + "Terrain_Meadow_Mud_01.terrainlayer",           // 6 lake shores

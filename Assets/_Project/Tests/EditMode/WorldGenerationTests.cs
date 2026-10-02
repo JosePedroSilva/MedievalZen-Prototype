@@ -399,6 +399,137 @@ namespace MedievalZen.Tests
             }
         }
 
+        [Test]
+        public void Resolutions_DefaultWorld_SplatIsOneMetre_CoverGridStaysTwoMetres()
+        {
+            var p = new WorldGenParams();
+            Assert.That(p.AlphamapResolution, Is.EqualTo(2048));
+            Assert.That(p.CoverResolution, Is.EqualTo(1024));
+            p.alphamapResolutionOverride = 1024;
+            Assert.That(p.AlphamapResolution, Is.EqualTo(1024));
+            Assert.That(p.CoverResolution, Is.EqualTo(1024));
+            p.alphamapResolutionOverride = 256;
+            Assert.That(p.CoverResolution, Is.EqualTo(256), "The cover grid is never finer than the splat.");
+
+            WorldBlueprint bp = DefaultWorld42;
+            Assert.That(bp.Splat.GetLength(0), Is.EqualTo(bp.Params.AlphamapResolution));
+            Assert.That(bp.Cover.Resolution, Is.EqualTo(bp.Params.CoverResolution));
+            Assert.That(bp.DetailResolution, Is.EqualTo(bp.Params.CoverResolution));
+        }
+
+        [Test]
+        public void Splat_RoadCoreIsSolidDirt_WithAWornVerge()
+        {
+            WorldBlueprint bp = DefaultWorld42;
+            WorldGenParams p = bp.Params;
+            float[,,] splat = bp.Splat;
+            int res = splat.GetLength(0);
+            RoadDistanceField roads = RoadDistanceField.Build(TerrainShaper.CenterLines(bp.Roads), res, p.worldSize, 30f);
+            float half = p.roadWidth * 0.5f;
+            float core = half - TerrainShaper.RoadCoreInset;
+            Assert.That(core * 2f, Is.GreaterThanOrEqualTo(p.roadWidth - 1f - 1e-4f), "Solid dirt across at least roadWidth - 1 m.");
+
+            int coreTexels = 0, vergeTexels = 0;
+            double vergeLush = 0.0, farLush = 0.0;
+            int farTexels = 0;
+            for (int z = 0; z < res; z++)
+            {
+                for (int x = 0; x < res; x++)
+                {
+                    if (splat[z, x, TerrainShaper.CobbleLayer] > 0f) continue;   // town squares are cobbled
+                    float d = roads[x, z];
+                    if (d <= core)
+                    {
+                        coreTexels++;
+                        Assert.That(splat[z, x, TerrainShaper.DirtLayer], Is.GreaterThanOrEqualTo(0.95f), $"Road texel ({x}, {z}) at {d:0.00} m from the centre line.");
+                    }
+                    else if (d > half + 0.5f && d < half + 1.5f)
+                    {
+                        vergeTexels++;
+                        vergeLush += splat[z, x, TerrainShaper.LushGrassLayer];
+                    }
+                    else if (d > half + 12f && d < half + 20f)
+                    {
+                        farTexels++;
+                        farLush += splat[z, x, TerrainShaper.LushGrassLayer];
+                    }
+                }
+            }
+
+            Assert.That(coreTexels, Is.GreaterThan(5000), "The default world should have kilometres of road.");
+            Assert.That(vergeTexels, Is.GreaterThan(1000));
+            Assert.That(vergeLush / vergeTexels, Is.LessThan(0.6 * farLush / farTexels), "The verge should be visibly worn (less lush grass than the fields beside the road).");
+        }
+
+        [Test]
+        public void Splat_SlopesSteeperThan40Degrees_AreRock_AndWeightsSumToOne()
+        {
+            WorldBlueprint bp = DefaultWorld42;
+            WorldGenParams p = bp.Params;
+            float[,,] splat = bp.Splat;
+            int res = splat.GetLength(0);
+            float texel = p.worldSize / res;
+            RoadDistanceField roads = RoadDistanceField.Build(TerrainShaper.CenterLines(bp.Roads), res, p.worldSize, 30f);
+            float roadClear = p.roadWidth * 0.5f + TerrainShaper.RoadVergeWidth + 0.5f;
+            float tan40 = Mathf.Tan(40f * Mathf.Deg2Rad);
+            Assert.That(TerrainShaper.RockSlopeFull, Is.EqualTo(tan40).Within(1e-3f), "Slopes are rise over run: 40 degrees = tan 40.");
+            Assert.That(TerrainShaper.RockSlopeStart, Is.EqualTo(Mathf.Tan(30f * Mathf.Deg2Rad)).Within(1e-3f));
+
+            int steep = 0, gentleRock = 0, gentle = 0;
+            for (int z = 0; z < res; z += 3)
+            {
+                float wz = (z + 0.5f) * texel;
+                for (int x = 0; x < res; x += 3)
+                {
+                    float sum = 0f;
+                    for (int l = 0; l < TerrainShaper.LayerCount; l++) sum += splat[z, x, l];
+                    Assert.That(sum, Is.EqualTo(1f).Within(1e-3f));
+
+                    if (roads[x, z] < roadClear || splat[z, x, TerrainShaper.CobbleLayer] > 0f) continue;
+                    float wx = (x + 0.5f) * texel;
+                    float slope = bp.Cover.SampleSlope(wx, wz);
+                    if (slope > tan40)
+                    {
+                        steep++;
+                        Assert.That(splat[z, x, TerrainShaper.RockLayer], Is.GreaterThanOrEqualTo(0.9f), $"Texel ({x}, {z}) is {Mathf.Atan(slope) * Mathf.Rad2Deg:0} degrees steep.");
+                    }
+                    else if (slope < 0.3f && bp.Cover.Sample(wx, wz).height < 0.6f * p.hillAmplitude)
+                    {
+                        gentle++;
+                        if (splat[z, x, TerrainShaper.RockLayer] > 0.5f) gentleRock++;
+                    }
+                }
+            }
+
+            Assert.That(steep, Is.GreaterThan(500), "The default relief should have escarpments / cliffs steeper than 40 degrees.");
+            Assert.That(gentleRock, Is.LessThan(gentle / 100 + 1), "Gentle lowland ground should not be painted as rock.");
+        }
+
+        [Test]
+        public void Resample_BoxAveragesAndKeepsSumToOne()
+        {
+            var fine = new float[4, 4, 2];
+            for (int z = 0; z < 4; z++)
+            {
+                for (int x = 0; x < 4; x++)
+                {
+                    fine[z, x, 0] = (x + z) % 2 == 0 ? 1f : 0.5f;
+                    fine[z, x, 1] = 1f - fine[z, x, 0];
+                }
+            }
+
+            Assert.That(TerrainShaper.Resample(fine, 4), Is.SameAs(fine));
+            float[,,] coarse = TerrainShaper.Resample(fine, 2);
+            for (int z = 0; z < 2; z++)
+            {
+                for (int x = 0; x < 2; x++)
+                {
+                    Assert.That(coarse[z, x, 0], Is.EqualTo(0.75f).Within(1e-5f));
+                    Assert.That(coarse[z, x, 0] + coarse[z, x, 1], Is.EqualTo(1f).Within(1e-5f));
+                }
+            }
+        }
+
         private static float CrossSectionVariance(float[,] map, WorldGenParams p, List<Vector3[]> profiles)
         {
             double total = 0.0;

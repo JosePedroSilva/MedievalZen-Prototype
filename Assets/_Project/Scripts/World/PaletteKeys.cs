@@ -5,13 +5,15 @@ namespace MedievalZen.World
 {
     /// <summary>
     /// What the pure generation stages need to know about the prefab palette: how many variants exist per family
-    /// (0 = family unavailable, skip it) and the footprint of line pieces. Produced by
-    /// <see cref="WorldPalette.GetKeys"/>; <see cref="Default"/> mirrors <see cref="SyntyCatalog"/>.
+    /// (0 = family unavailable, skip it), the footprint of line pieces and the measured shape (<see cref="PropMetrics"/>) of
+    /// every rock, cliff and mound variant. Produced by <see cref="WorldPalette.GetKeys"/>; <see cref="Default"/> mirrors
+    /// <see cref="SyntyCatalog"/> with the offline <see cref="PropMetricsTable"/>.
     /// </summary>
     public sealed class PaletteKeys
     {
         private readonly Dictionary<string, int> counts = new Dictionary<string, int>();
         private readonly Dictionary<string, int> detailCounts = new Dictionary<string, int>();
+        private readonly Dictionary<string, PropMetrics[]> metrics = new Dictionary<string, PropMetrics[]>();
 
         /// <summary>Length in metres of one straight fence piece.</summary>
         public float fenceLength = 3f;
@@ -25,7 +27,15 @@ namespace MedievalZen.World
             get
             {
                 var keys = new PaletteKeys();
-                foreach (var (family, paths) in SyntyCatalog.Families) keys.SetCount(family, paths.Length);
+                foreach (var (family, paths) in SyntyCatalog.Families)
+                {
+                    keys.SetCount(family, paths.Length);
+                    var measured = new PropMetrics[paths.Length];
+                    bool any = false;
+                    for (int i = 0; i < paths.Length; i++) any |= PropMetricsTable.TryGetForPath(paths[i], out measured[i]);
+                    if (any) keys.SetMetrics(family, measured);
+                }
+
                 foreach (var (family, paths) in SyntyCatalog.Details) keys.SetDetailCount(family, paths.Length);
                 return keys;
             }
@@ -48,6 +58,38 @@ namespace MedievalZen.World
 
         /// <summary>Sets the number of detail prototypes for <paramref name="family"/>.</summary>
         public void SetDetailCount(string family, int count) => detailCounts[family] = Math.Max(0, count);
+
+        /// <summary>Sets the measured shape of each variant of <paramref name="family"/> (parallel to the variant indices).</summary>
+        public void SetMetrics(string family, PropMetrics[] variants)
+        {
+            if (family == null) return;
+            if (variants == null) metrics.Remove(family);
+            else metrics[family] = variants;
+        }
+
+        /// <summary>
+        /// Measured shape of <paramref name="variant"/> (wrapped like the palette does) of <paramref name="family"/>; false when
+        /// the family has no metrics or this variant was not measured.
+        /// </summary>
+        public bool TryGetMetrics(string family, int variant, out PropMetrics result)
+        {
+            result = default;
+            if (family == null || !metrics.TryGetValue(family, out PropMetrics[] list) || list.Length == 0) return false;
+            result = list[((variant % list.Length) + list.Length) % list.Length];
+            return result.IsValid;
+        }
+
+        /// <summary>True when every variant of <paramref name="family"/> has measured metrics.</summary>
+        public bool HasMetrics(string family)
+        {
+            if (family == null || !metrics.TryGetValue(family, out PropMetrics[] list) || list.Length == 0 || list.Length != Count(family)) return false;
+            foreach (PropMetrics m in list)
+            {
+                if (!m.IsValid) return false;
+            }
+
+            return true;
+        }
 
         /// <summary>Random variant index for <paramref name="family"/> (0 when the family has one or no prefabs).</summary>
         public int PickVariant(string family, Random rng)

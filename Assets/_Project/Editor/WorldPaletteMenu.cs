@@ -88,6 +88,7 @@ namespace MedievalZen.EditorTools
             }
 
             ConfigureLinePieces(palette);
+            MeasureRockMetrics(palette);
 
             // Detail families: single-mesh copies of the LOD0 of each prefab (rebuilt every time), with their
             // native sizes so the builder can scale every family into its target height range.
@@ -113,11 +114,18 @@ namespace MedievalZen.EditorTools
             palette.detailVersion = WorldPalette.CurrentDetailVersion;
             Debug.Log(sizeLog.ToString(), palette);
 
-            // Terrain layers.
+            // Terrain layers (the rock channel is the first-party RockWall layer, created here from the Meadow textures).
+            EnsureRockWallLayer(missing);
             var layers = new List<TerrainLayer>();
             foreach (string path in SyntyCatalog.TerrainLayers)
             {
                 var layer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(path);
+                if (layer == null && path == SyntyCatalog.RockWallLayer)
+                {
+                    Debug.LogWarning($"{SyntyCatalog.RockWallLayer} could not be created; using {SyntyCatalog.RockFallbackLayer} for rock.");
+                    layer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(SyntyCatalog.RockFallbackLayer);
+                }
+
                 if (layer == null) missing.Add(path);
                 else layers.Add(layer);
             }
@@ -150,6 +158,128 @@ namespace MedievalZen.EditorTools
             }
 
             return palette;
+        }
+
+        // ------------------------------------------------------------------ rock metrics and the rock terrain layer
+
+        /// <summary>
+        /// Creates (or refreshes) <see cref="SyntyCatalog.RockWallLayer"/>: the Meadow RockWall texture and normals that the Meadow
+        /// rock and cliff meshes show on their sides, tiled every <see cref="SyntyCatalog.RockWallTileSize"/> m like their triplanar
+        /// material, so painted rock matches the meshes. Never touches the Synty assets.
+        /// </summary>
+        private static void EnsureRockWallLayer(List<string> missing)
+        {
+            var diffuse = AssetDatabase.LoadAssetAtPath<Texture2D>(SyntyCatalog.RockWallTexture);
+            var normals = AssetDatabase.LoadAssetAtPath<Texture2D>(SyntyCatalog.RockWallNormals);
+            if (diffuse == null)
+            {
+                missing.Add(SyntyCatalog.RockWallTexture);
+                return;
+            }
+
+            if (normals == null) missing.Add(SyntyCatalog.RockWallNormals);
+            var layer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(SyntyCatalog.RockWallLayer);
+            bool create = layer == null;
+            if (create) layer = new TerrainLayer();
+            layer.diffuseTexture = diffuse;
+            layer.normalMapTexture = normals;
+            layer.normalScale = 1f;
+            layer.tileSize = new Vector2(SyntyCatalog.RockWallTileSize, SyntyCatalog.RockWallTileSize);
+            layer.tileOffset = Vector2.zero;
+            layer.smoothness = 0f;
+            layer.metallic = 0f;
+            if (create)
+            {
+                EnsureFolder(SyntyCatalog.RockWallLayer.Substring(0, SyntyCatalog.RockWallLayer.LastIndexOf('/')));
+                AssetDatabase.CreateAsset(layer, SyntyCatalog.RockWallLayer);
+                Debug.Log($"Created {SyntyCatalog.RockWallLayer} (RockWall_Texture_01 + RockWall_Normals_01, {SyntyCatalog.RockWallTileSize} m tiles).", layer);
+            }
+            else
+            {
+                EditorUtility.SetDirty(layer);
+            }
+        }
+
+        /// <summary>
+        /// Measures every rock, cliff, mound and cairn prefab (LOD0 meshes in prefab space) into
+        /// <see cref="PrefabFamily.metrics"/> with <see cref="PropMetrics.FromTriangles"/>, and logs each prefab's size and any
+        /// difference from the offline table (<see cref="PropMetricsTable"/>) larger than 5 cm.
+        /// </summary>
+        private static void MeasureRockMetrics(WorldPalette palette)
+        {
+            var log = new System.Text.StringBuilder("Rock metrics (prefab space, m):");
+            int measured = 0, differing = 0;
+            foreach (PrefabFamily family in palette.families)
+            {
+                if (family == null || !(PropRole.IsRock(family.id) || family.id == PropRole.StoneStack || family.id == PropRole.StonePile)) continue;
+                family.metrics = new PropMetrics[family.prefabs.Length];
+                for (int i = 0; i < family.prefabs.Length; i++)
+                {
+                    GameObject prefab = family.prefabs[i];
+                    if (prefab == null) continue;
+                    PropMetrics m = MeasurePrefab(prefab);
+                    family.metrics[i] = m;
+                    if (!m.IsValid)
+                    {
+                        log.Append($"\n  {family.id}/{prefab.name}: no readable mesh (the offline table will be used)");
+                        continue;
+                    }
+
+                    measured++;
+                    string note = string.Empty;
+                    if (PropMetricsTable.TryGet(prefab.name, out PropMetrics offline))
+                    {
+                        float diff = PropMetrics.BoundsDifference(m, offline);
+                        if (diff > 0.05f)
+                        {
+                            differing++;
+                            note = $"  <-- differs from offline by {diff:0.00} m (offline {offline})";
+                        }
+                    }
+                    else
+                    {
+                        note = "  (not in the offline table)";
+                    }
+
+                    log.Append($"\n  {family.id}/{prefab.name}: {m}{note}");
+                }
+            }
+
+            log.Insert(0, $"Measured {measured} rock-like prefabs; {differing} differ from the offline measurements by more than 5 cm. ");
+            Debug.Log(log.ToString(), palette);
+        }
+
+        /// <summary>LOD0 (or all) mesh triangles of <paramref name="prefab"/> in its root space, measured.</summary>
+        private static PropMetrics MeasurePrefab(GameObject prefab)
+        {
+            var renderers = new List<Renderer>();
+            var lodGroup = prefab.GetComponentInChildren<LODGroup>();
+            if (lodGroup != null && lodGroup.GetLODs().Length > 0)
+            {
+                foreach (Renderer r in lodGroup.GetLODs()[0].renderers)
+                {
+                    if (r != null) renderers.Add(r);
+                }
+            }
+
+            if (renderers.Count == 0) renderers.AddRange(prefab.GetComponentsInChildren<MeshRenderer>(true));
+            var vertices = new List<Vector3>();
+            var triangles = new List<int>();
+            Matrix4x4 toRoot = prefab.transform.worldToLocalMatrix;
+            foreach (Renderer renderer in renderers)
+            {
+                var filter = renderer.GetComponent<MeshFilter>();
+                if (filter == null || filter.sharedMesh == null) continue;
+                Mesh mesh = filter.sharedMesh;
+                Vector3[] v = mesh.vertices;
+                if (v == null || v.Length == 0) continue;
+                Matrix4x4 m = toRoot * filter.transform.localToWorldMatrix;
+                int start = vertices.Count;
+                foreach (Vector3 p in v) vertices.Add(m.MultiplyPoint3x4(p));
+                foreach (int t in mesh.triangles) triangles.Add(start + t);
+            }
+
+            return vertices.Count > 0 ? PropMetrics.FromTriangles(vertices, triangles) : default;
         }
 
         // ------------------------------------------------------------------ line pieces

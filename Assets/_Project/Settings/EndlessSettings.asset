@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 13a0caadb0a401b449f02dcd8fb43597, type: 3}
+  m_Name: EndlessSettings
+  m_EditorClassIdentifier: MedievalZen::MedievalZen.Endless.EndlessSettings
+  seed: 12345
+  dayLengthMinutes: 24
+  roadWidth: 5
+  maxRoadGrade: 0.08
+  innSpacingMin: 1200
+  innSpacingMax: 2400
+  regionLengthMin: 1500
+  regionLengthMax: 3500
+  tileSize: 256
+  heightRange: 420
+  nearDistance: 420
+  farDistance: 2200
+  releaseMargin: 160
+  applyBudgetMs: 2.5
+  workerCount: 3
+  originShiftDistance: 4000

@@ -10,26 +10,33 @@ namespace MedievalZen.World
         Peak = 0,
         /// <summary>A lake (connected body of water).</summary>
         Lake = 1,
+        /// <summary>The col the pass road crosses (position = highest point of the pass road).</summary>
+        Pass = 2,
+        /// <summary>A lookout beside the pass road with a view over the lowland.</summary>
+        Viewpoint = 3,
     }
 
-    /// <summary>A named natural landmark for the map (Phase 3 draws these on the parchment map).</summary>
+    /// <summary>A named landmark for the map (the parchment map draws a symbol and a label for each).</summary>
     [System.Serializable]
     public struct Landmark
     {
         /// <summary>Display name.</summary>
         public string name;
-        /// <summary>Peak or lake.</summary>
+        /// <summary>Peak, lake, pass or viewpoint.</summary>
         public LandmarkKind kind;
-        /// <summary>Peak summit, or lake centroid at water height.</summary>
+        /// <summary>Peak summit; lake centroid at water height; where the pass road crosses the col; the viewpoint clearing.</summary>
         public Vector3 position;
-        /// <summary>Lake: radius of a circle with the lake's area. Peak: 0.</summary>
+        /// <summary>Lake: radius of a circle with the lake's area. Others: 0.</summary>
         public float radius;
 
         /// <inheritdoc />
         public override string ToString() => $"{kind} '{name}' at ({position.x:0}, {position.y:0.0}, {position.z:0}) r {radius:0}";
     }
 
-    /// <summary>Finds the tallest peak and every lake larger than <see cref="MinLakeArea"/>.</summary>
+    /// <summary>
+    /// Finds the tallest peak and every lake larger than <see cref="MinLakeArea"/>. (The pass and viewpoint landmarks are added
+    /// with the pass features, <see cref="ScatterPlanner.PlacePassFeatures"/>.)
+    /// </summary>
     public static class LandmarkFinder
     {
         /// <summary>Smallest lake that gets a name, in square metres.</summary>

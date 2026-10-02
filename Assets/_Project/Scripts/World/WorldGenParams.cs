@@ -52,6 +52,27 @@ namespace MedievalZen.World
         /// <summary>Escarpment height (relative metres).</summary>
         public float escarpmentHeight = 25f;
 
+        /// <summary>Crest height of the col between the central summits (the pass), fraction of <see cref="mountainAmplitude"/>.</summary>
+        public float passHeight = 0.76f;
+
+        /// <summary>Strength of the drainage-valley carving in the highlands, 0 (none) .. 1 (deep).</summary>
+        public float valleyCarving = 0.5f;
+
+        /// <summary>Fraction of the total relief above which no broadleaf trees grow (pines thin out above it).</summary>
+        public float treeLine = 0.7f;
+
+        /// <summary>Place a mountain inn near the pass and connect it with grade-limited pass roads.</summary>
+        public bool mountainInn = true;
+
+        /// <summary>Design grade (rise over run) of the pass road; lowland roads use <see cref="LowlandRoadGrade"/>.</summary>
+        public float maxRoadGrade = 0.12f;
+
+        /// <summary>Design grade of the lowland roads.</summary>
+        public const float LowlandRoadGrade = 0.15f;
+
+        /// <summary>Hard limit for any road: steepest 10 m stretch after carving (rise over run).</summary>
+        public const float HardRoadGrade = 0.18f;
+
         /// <summary>Fraction of the map under water (0 = no lakes).</summary>
         public float lakeCoverage = 0.035f;
 
@@ -73,25 +94,54 @@ namespace MedievalZen.World
         /// <summary>Road surface width in metres.</summary>
         public float roadWidth = 5f;
 
-        /// <summary>Alphamap (splat) resolution; 0 = derive from the world size (about worldSize / 2, power of two).</summary>
+        /// <summary>Alphamap (splat) resolution; 0 = derive from the world size (about 1 texel per metre, power of two).</summary>
         public int alphamapResolutionOverride;
 
-        /// <summary>Alphamap resolution actually used: a power of two in 16..4096 close to worldSize / 2 (or the override).</summary>
+        /// <summary>
+        /// Alphamap (splat) resolution actually used: a power of two in 16..4096 close to worldSize (1 m texels, so a 5 m
+        /// road has a crisp edge), or the override. 2048 on the default 2 km map.
+        /// </summary>
         public int AlphamapResolution
         {
             get
             {
-                // Managed code only (no native Mathf helpers) so the pure stages run outside Unity too.
-                int target = alphamapResolutionOverride > 0 ? alphamapResolutionOverride : Mathf.Max(16, Mathf.RoundToInt(worldSize * 0.5f));
-                int pow = 16;
-                while (pow < target && pow < 4096) pow <<= 1;
-                if (alphamapResolutionOverride > 0 && pow > 16 && pow - target > target - pow / 2) pow >>= 1;
-                return pow;
+                int target = alphamapResolutionOverride > 0 ? alphamapResolutionOverride : Mathf.Max(16, Mathf.RoundToInt(worldSize));
+                return PowerOfTwoNear(target, alphamapResolutionOverride > 0);
             }
+        }
+
+        /// <summary>
+        /// Resolution of the land-cover grid shared by the road distance field, biome fields, scatter and the terrain
+        /// detail (grass) maps: about 2 m cells (worldSize / 2, power of two), never finer than <see cref="AlphamapResolution"/>.
+        /// 1024 on the default 2 km map. Detail densities are "instances per cell", so this must not follow the finer splat.
+        /// </summary>
+        public int CoverResolution => Math.Min(PowerOfTwoNear(Mathf.Max(16, Mathf.RoundToInt(worldSize * 0.5f)), false), AlphamapResolution);
+
+        private static int PowerOfTwoNear(int target, bool nearest)
+        {
+            // Managed code only (no native Mathf helpers) so the pure stages run outside Unity too.
+            int pow = 16;
+            while (pow < target && pow < 4096) pow <<= 1;
+            if (nearest && pow > 16 && pow - target > target - pow / 2) pow >>= 1;
+            return pow;
         }
 
         /// <summary>Half the road width plus the scatter-free margin (8 m) on each side.</summary>
         public float ScatterCorridor => roadWidth * 0.5f + 8f;
+
+        /// <summary>
+        /// Set when the stages run on a window of an endless world (see <see cref="TileWindow"/>): local coordinates
+        /// 0..<see cref="worldSize"/> then start at an absolute origin, and noise, patch patterns, scatter chunks and detail
+        /// dithering continue across window edges. Null for the finite world (which is unchanged by it).
+        /// </summary>
+        [NonSerialized]
+        public TileWindow window;
+
+        /// <summary>X offset added to local coordinates before noise lookups (0 for the finite world).</summary>
+        public float NoiseOriginX => window != null ? window.noiseOriginX : 0f;
+
+        /// <summary>Z offset added to local coordinates before noise lookups (0 for the finite world).</summary>
+        public float NoiseOriginZ => window != null ? window.noiseOriginZ : 0f;
 
         /// <summary>Copies the generation inputs from <paramref name="settings"/>.</summary>
         public static WorldGenParams From(WorldSettings settings)
@@ -113,6 +163,11 @@ namespace MedievalZen.World
                 ridgeSharpness = settings.ridgeSharpness,
                 valleyFlatten = settings.valleyFlatten,
                 escarpmentHeight = settings.escarpmentHeight,
+                passHeight = settings.passHeight,
+                valleyCarving = settings.valleyCarving,
+                treeLine = settings.treeLine,
+                mountainInn = settings.mountainInn,
+                maxRoadGrade = settings.maxRoadGrade,
                 lakeCoverage = settings.lakeCoverage,
                 townCount = settings.townCount,
                 villageCount = settings.villageCount,

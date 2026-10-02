@@ -22,7 +22,8 @@ namespace MedievalZen.Travel
         [SerializeField, Min(0f), Tooltip("Extra metres beyond the footprint radius before a visit counts as over.")]
         private float leaveMargin = 20f;
 
-        private bool[] announced = System.Array.Empty<bool>();
+        // Keyed by name (unique in a world) rather than index, so the state survives the endless road replacing its network.
+        private readonly System.Collections.Generic.HashSet<string> announced = new System.Collections.Generic.HashSet<string>();
         private float nextCheck;
 
         private void Awake()
@@ -47,7 +48,6 @@ namespace MedievalZen.Travel
             RoadNetwork roads = GameWorld.Current != null ? GameWorld.Current.Roads : null;
             if (roads == null) return;
             var settlements = roads.Settlements;
-            if (announced.Length != settlements.Count) announced = new bool[settlements.Count];
 
             Vector3 p = transform.position;
             for (int i = 0; i < settlements.Count; i++)
@@ -56,14 +56,15 @@ namespace MedievalZen.Travel
                 float dx = s.Position.x - p.x;
                 float dz = s.Position.z - p.z;
                 float sqr = dx * dx + dz * dz;
-                if (!announced[i] && sqr <= s.Radius * s.Radius)
+                bool done = announced.Contains(s.Name);
+                if (!done && sqr <= s.Radius * s.Radius)
                 {
                     Announce(s);
                 }
-                else if (announced[i])
+                else if (done)
                 {
                     float leave = s.Radius + leaveMargin;
-                    if (sqr > leave * leave) announced[i] = false;
+                    if (sqr > leave * leave) announced.Remove(s.Name);
                 }
             }
         }
@@ -71,11 +72,7 @@ namespace MedievalZen.Travel
         private void Announce(Settlement settlement)
         {
             if (settlement == null) return;
-            if (settlement.Id >= 0 && settlement.Id < announced.Length)
-            {
-                if (announced[settlement.Id]) return;
-                announced[settlement.Id] = true;
-            }
+            if (!announced.Add(settlement.Name)) return;
 
             HudController hud = HudController.Instance;
             if (hud == null) return;

@@ -26,6 +26,21 @@ namespace MedievalZen.World
         [Tooltip("Detail families only: largest horizontal extent (m) of each prefab's mesh, parallel to Prefabs.")]
         public float[] nativeWidths = Array.Empty<float>();
 
+        [Tooltip("Rock-like families: measured shape of each prefab (bounds, face direction, underside grid), parallel to Prefabs. Measured by the palette menu; the generator seats rocks and cliffs from these.")]
+        public PropMetrics[] metrics = Array.Empty<PropMetrics>();
+
+        /// <summary>
+        /// Measured shape of <paramref name="prefab"/> in this family: the palette menu's measurement, else the offline table
+        /// (<see cref="PropMetricsTable"/>) by prefab name, else invalid.
+        /// </summary>
+        public PropMetrics MetricsOf(GameObject prefab)
+        {
+            if (prefabs == null || prefab == null) return default;
+            int i = Array.IndexOf(prefabs, prefab);
+            if (i >= 0 && metrics != null && i < metrics.Length && metrics[i].IsValid) return metrics[i];
+            return PropMetricsTable.TryGet(prefab.name, out PropMetrics table) ? table : default;
+        }
+
         /// <summary>
         /// Recorded native (height, width) of <paramref name="prefab"/> in this family, or <see cref="Vector2.zero"/>
         /// when unknown (older palettes).
@@ -60,10 +75,11 @@ namespace MedievalZen.World
     public sealed class WorldPalette : ScriptableObject
     {
         /// <summary>
-        /// Version of the detail-prefab pipeline (single-mesh copies, base normalisation, native sizes, curated
-        /// families). Palettes with a lower <see cref="detailVersion"/> are refreshed by the editor before generating.
+        /// Version of the palette pipeline (detail single-mesh copies, base normalisation, native sizes, curated families; v3:
+        /// measured rock/cliff metrics, Meadow-only highland rocks, the RockWall terrain layer). Palettes with a lower
+        /// <see cref="detailVersion"/> are refreshed by the editor before generating.
         /// </summary>
-        public const int CurrentDetailVersion = 2;
+        public const int CurrentDetailVersion = 3;
 
         /// <summary>
         /// Set by the editor: refreshes a palette whose <see cref="detailVersion"/> is stale (rebuilds the detail
@@ -149,7 +165,19 @@ namespace MedievalZen.World
             var keys = new PaletteKeys { fenceLength = fencePieceLength, wallLength = stoneWallLength };
             foreach (PrefabFamily family in families)
             {
-                if (family != null && !string.IsNullOrEmpty(family.id)) keys.SetCount(family.id, ValidPrefabs(family).Count);
+                if (family == null || string.IsNullOrEmpty(family.id)) continue;
+                List<GameObject> valid = ValidPrefabs(family);
+                keys.SetCount(family.id, valid.Count);
+                if (!PropRole.IsRock(family.id) && family.id != PropRole.StoneStack && family.id != PropRole.StonePile) continue;
+                var measured = new PropMetrics[valid.Count];
+                bool any = false;
+                for (int v = 0; v < valid.Count; v++)
+                {
+                    measured[v] = family.MetricsOf(valid[v]);
+                    any |= measured[v].IsValid;
+                }
+
+                if (any) keys.SetMetrics(family.id, measured);
             }
 
             foreach (PrefabFamily family in details)

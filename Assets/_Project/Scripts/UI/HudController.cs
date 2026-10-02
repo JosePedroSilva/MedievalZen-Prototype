@@ -7,6 +7,7 @@ using MedievalZen.Roads;
 using MedievalZen.Travel;
 using MedievalZen.World;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace MedievalZen.UI
@@ -14,8 +15,9 @@ namespace MedievalZen.UI
     /// <summary>
     /// The small, parchment-tinted screen HUD, built in code on its Canvas at Awake: time of day and day count (top left),
     /// destination + remaining road distance and mode chips (top right), a contextual prompt (bottom centre), queued toasts,
-    /// a choice list (signposts) and a full-screen fade layer. While the map is open (<see cref="MapMode"/>) everything but
-    /// the prompt fades out. Access it through <see cref="Instance"/>.
+    /// a choice list (signposts), the <see cref="JourneyMenu"/> side panel (Esc / Start) and a full-screen fade layer. While the
+    /// map is open (<see cref="MapMode"/>) or the player hides it (<see cref="ShowHud"/>) the always-on part fades out. Access
+    /// it through <see cref="Instance"/>. A scene with a player but no HUD gets one at runtime.
     /// </summary>
     [RequireComponent(typeof(Canvas))]
     [DisallowMultipleComponent]
@@ -51,6 +53,11 @@ namespace MedievalZen.UI
         private CanvasGroup destinationGroup;
         private Text destinationText;
         private Text chipsText;
+        private CanvasGroup roadGroup;
+        private Text roadRegion;
+        private Text roadDetail;
+        private float nextRoadRefresh;
+        private string lastRoadLine;
         private CanvasGroup promptGroup;
         private Text promptText;
         private CanvasGroup toastGroup;
@@ -84,6 +91,15 @@ namespace MedievalZen.UI
 
         /// <summary>True while the held map is open: the HUD hides except for the prompt.</summary>
         public bool MapMode { get; set; }
+
+        /// <summary>
+        /// Player preference (Journey menu → View): false fades out the always-on HUD (clock, destination, mode chips).
+        /// Contextual prompts, toasts, the choice list and fades still show.
+        /// </summary>
+        public bool ShowHud { get; set; } = true;
+
+        /// <summary>The Journey menu built with this HUD.</summary>
+        public JourneyMenu Journey { get; private set; }
 
         /// <summary>Current alpha of the full-screen fade (0 = clear, 1 = black).</summary>
         public float FadeAlpha => fadeImage != null ? fadeImage.color.a : 0f;
@@ -172,7 +188,39 @@ namespace MedievalZen.UI
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
+            if (GetComponent<GraphicRaycaster>() == null) gameObject.AddComponent<GraphicRaycaster>();   // the Journey menu is clickable
             Build();
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void InstallSceneHook()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            EnsureForScene();
+        }
+
+        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode) => EnsureForScene();
+
+        /// <summary>
+        /// Scenes with a player but no HUD (e.g. PlayerTest.unity) get one at runtime, so the Journey menu is always there;
+        /// a scene with UI but no EventSystem gets an EventSystem with the Input System UI module (default UI actions).
+        /// Nothing is saved into the scene.
+        /// </summary>
+        private static void EnsureForScene()
+        {
+            if (Instance == null && FindFirstObjectByType<PlayerController>() != null)
+            {
+                var ui = new GameObject("UI (runtime)", typeof(RectTransform));
+                int layer = LayerMask.NameToLayer("UI");
+                ui.layer = layer >= 0 ? layer : 0;
+                var canvas = ui.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 10;
+                ui.AddComponent<HudController>();
+            }
+
+            if (Instance != null) JourneyMenu.EnsureEventSystem();
         }
 
         private void Start()
@@ -209,13 +257,14 @@ namespace MedievalZen.UI
         {
             float dt = Time.unscaledDeltaTime;
             float step = dt / panelFadeSeconds;
-            hudGroup.alpha = Mathf.MoveTowards(hudGroup.alpha, MapMode ? 0f : 1f, step);
+            hudGroup.alpha = Mathf.MoveTowards(hudGroup.alpha, MapMode || !ShowHud ? 0f : 1f, step);
             promptGroup.alpha = Mathf.MoveTowards(promptGroup.alpha, promptVisible ? 1f : 0f, step);
             menuGroup.alpha = Mathf.MoveTowards(menuGroup.alpha, menuVisible ? 1f : 0f, step);
 
             UpdateClock();
             UpdateChips();
             UpdateDestination();
+            UpdateRoad();
             UpdateToast(dt);
         }
 
@@ -276,6 +325,34 @@ namespace MedievalZen.UI
             lastDestinationLine = line;
             destinationGroup.alpha = line != null ? 1f : 0f;
             destinationText.text = line ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Endless road only: the region, the distance walked along the road and the next inn in the direction the traveller
+        /// faces. Hidden in the finite world.
+        /// </summary>
+        private void UpdateRoad()
+        {
+            if (Time.unscaledTime < nextRoadRefresh) return;
+            nextRoadRefresh = Time.unscaledTime + distanceRefreshSeconds;
+            MedievalZen.Endless.EndlessWorld endless = MedievalZen.Endless.EndlessWorld.Current;
+            if (endless == null || endless.Generator == null)
+            {
+                if (roadGroup.alpha > 0f) roadGroup.alpha = 0f;
+                lastRoadLine = null;
+                return;
+            }
+
+            string region = endless.RegionName;
+            MedievalZen.Endless.Waypoint inn = endless.InnAheadOfTraveller;
+            string walked = endless.S >= 0.0 ? $"{endless.S / 1000.0:0.0} km walked" : $"{-endless.S / 1000.0:0.0} km behind the start";
+            string detail = inn != null ? $"{walked}   ·   {inn.Name} in {UiKit.FormatDistance((float)endless.RoadDistanceTo(inn))}" : walked;
+            string line = region + " | " + detail;
+            roadGroup.alpha = string.IsNullOrEmpty(region) ? 0f : 1f;
+            if (line == lastRoadLine) return;
+            lastRoadLine = line;
+            roadRegion.text = region;
+            roadDetail.text = detail;
         }
 
         private float RouteDistance(Settlement destination)
@@ -384,6 +461,16 @@ namespace MedievalZen.UI
             dayText = UiKit.CreateText("Day", clock.transform, 18, TextAnchor.MiddleRight, UiKit.FadedInk, FontStyle.Italic);
             UiKit.Place(dayText.rectTransform, new Vector2(1f, 0.5f), new Vector2(-14f, 0f), new Vector2(70f, 40f));
 
+            // Under the clock: the endless road's region, distance walked and next inn (hidden in the finite world).
+            Image road = UiKit.CreatePanel("Road", hud, UiKit.Parchment);
+            UiKit.Place(road.rectTransform, new Vector2(0f, 1f), new Vector2(24f, -94f), new Vector2(420f, 64f));
+            roadGroup = road.gameObject.AddComponent<CanvasGroup>();
+            roadGroup.alpha = 0f;
+            roadRegion = UiKit.CreateText("Region", road.transform, 20, TextAnchor.UpperLeft, UiKit.Ink, FontStyle.Bold);
+            UiKit.Place(roadRegion.rectTransform, new Vector2(0f, 1f), new Vector2(14f, -6f), new Vector2(392f, 28f));
+            roadDetail = UiKit.CreateText("Detail", road.transform, 17, TextAnchor.UpperLeft, UiKit.FadedInk, FontStyle.Italic);
+            UiKit.Place(roadDetail.rectTransform, new Vector2(0f, 1f), new Vector2(14f, -34f), new Vector2(392f, 24f));
+
             // Top-right: destination + chips.
             Image destination = UiKit.CreatePanel("Destination", hud, UiKit.Parchment);
             UiKit.Place(destination.rectTransform, new Vector2(1f, 1f), new Vector2(-24f, -24f), new Vector2(380f, 44f));
@@ -417,6 +504,10 @@ namespace MedievalZen.UI
             menuBody.lineSpacing = 1.2f;
             menuFooter = UiKit.CreateText("Footer", menu.transform, 16, TextAnchor.LowerCenter, UiKit.FadedInk, FontStyle.Italic);
             UiKit.Place(menuFooter.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 14f), new Vector2(480f, 26f));
+
+            // Journey menu (Esc / Start): a side panel over the HUD, under the fade and the toasts.
+            Journey = gameObject.AddComponent<JourneyMenu>();
+            Journey.Build(this, root);
 
             // Full-screen fade.
             RectTransform fade = UiKit.CreateRect("Fade", root);

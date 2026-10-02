@@ -123,5 +123,32 @@ namespace MedievalZen.Tests
             follower.Reproject(new Vector3(90f, 0f, 0f));      // behind the start of the route
             Assert.That(follower.Distance, Is.EqualTo(0f).Within(Tolerance));
         }
+
+        [Test]
+        public void LookAheadGuard_MovesOnWhenTheBodyReachedTheSteeringPoint()
+        {
+            // The body cut the corner at B and stands on the point 2.5 m ahead of its projection on the first leg.
+            RouteFollower follower = FollowerFromAToC();
+            follower.SetDistance(99f);
+            Vector3 body = follower.LookAhead(2.5f) + new Vector3(0.3f, 0f, 0f);
+            float moved = follower.AdvanceWhileLookAheadWithin(body, 2.5f, 1.25f);
+            Assert.That(moved, Is.GreaterThan(0f));
+            Vector3 gap = follower.LookAhead(2.5f) - body;
+            gap.y = 0f;
+            Assert.That(gap.magnitude, Is.GreaterThanOrEqualTo(1.25f));
+            Assert.That(follower.Distance, Is.LessThan(105f), "moves on only as far as needed");
+        }
+
+        [Test]
+        public void LookAheadGuard_LeavesNormalFollowingAndTheArrivalAlone()
+        {
+            RouteFollower follower = FollowerFromAToC();
+            follower.SetDistance(30f);
+            Assert.That(follower.AdvanceWhileLookAheadWithin(follower.Position, 2.5f, 1.25f), Is.EqualTo(0f), "on the road the target is 2.5 m ahead");
+
+            follower.SetDistance(198.5f);   // look-ahead already clamped to the route end: arrival handles the rest
+            Assert.That(follower.AdvanceWhileLookAheadWithin(new Vector3(100f, 0f, 100f), 2.5f, 1.25f), Is.EqualTo(0f));
+            Assert.That(follower.IsFinished, Is.False);
+        }
     }
 }

@@ -12,6 +12,11 @@
 
   <ItemGroup>
     <ProjectReference Include="MedievalZen.Runtime.csproj" />
+    <!-- The EditMode test asmdef is editor-only, so Unity gives it UnityEditor (AssetDatabase in TerrainPersistenceTests). -->
+    <Reference Include="$(UnityManagedDir)\UnityEditor.dll;$(UnityManagedDir)\UnityEditor.*.dll">
+      <HintPath>%(FullPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
     <!-- Unity's custom NUnit build (com.unity.ext.nunit); the folder name carries a hash, hence the glob. -->
     <Reference Include="$(ProjectRoot)Library\PackageCache\com.unity.ext.nunit@*\net40\unity-custom\nunit.framework.dll">
       <HintPath>%(FullPath)</HintPath>

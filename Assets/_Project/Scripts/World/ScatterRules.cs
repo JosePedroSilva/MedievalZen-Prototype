@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace MedievalZen.World
 {
@@ -34,6 +35,20 @@ namespace MedievalZen.World
         public float scaleMin = 0.8f;
         /// <summary>Uniform scale range.</summary>
         public float scaleMax = 1.2f;
+        /// <summary>Nothing is placed at or above this normalised height (fraction of the total relief); 2 = no limit.</summary>
+        public float maxHeight = 2f;
+        /// <summary>Below <see cref="maxHeight"/> the density fades out over this band of normalised height.</summary>
+        public float heightFade = 0.06f;
+        /// <summary>
+        /// Rock-like families (<see cref="PropRole.IsRock"/>): target size range in metres of mesh height (the planner converts it
+        /// to a scale from the measured prefab; 0 = the family default in <see cref="RockPlacer.SpecFor"/>). Replaces
+        /// <see cref="scaleMin"/> / <see cref="scaleMax"/> for them.
+        /// </summary>
+        public float heightMin;
+        /// <summary>See <see cref="heightMin"/>.</summary>
+        public float heightMax;
+        /// <summary>Rock-like families: exponent on the size roll (&gt; 1 favours the small end of the range).</summary>
+        public float sizeBias = 1f;
 
         /// <summary>Creates a rule.</summary>
         public ScatterRule(string family, BiomeWeights biomes, float density, float footprint)
@@ -57,29 +72,35 @@ namespace MedievalZen.World
 
         /// <summary>
         /// Rules in placement order (big things first so small props fill the gaps). Densities scale with
-        /// <see cref="WorldGenParams.forestDensity"/> only through the forest biome itself.
+        /// <see cref="WorldGenParams.forestDensity"/> only through the forest biome itself. Broadleaf trees stop below
+        /// <paramref name="treeLine"/> (fraction of the total relief); pines and the odd dead tree thin out above it and
+        /// are gone 16 % higher, leaving rock, dry grass and cairns on the summits.
         /// </summary>
-        public static List<ScatterRule> Default()
+        public static List<ScatterRule> Default(float treeLine = 0.7f)
         {
+            float broadleaf = Mathf.Clamp(treeLine, 0.2f, 1.5f);
+            float conifer = broadleaf + 0.16f;
             return new List<ScatterRule>
             {
                 // Trees (terrain tree instances). Forest ~110/ha gives ~15-20k trees on the default 2 km map.
-                new ScatterRule(PropRole.ForestTree, B(0.02f, 1f, 0.1f, 0f), 140f, 2.2f) { maxSlope = 0.8f, scaleMin = 0.8f, scaleMax = 1.3f },
-                new ScatterRule(PropRole.MeadowTree, B(1f, 0f, 0.4f, 0.1f, 0.5f), 2.5f, 3.5f) { maxSlope = 0.6f, clump = 0.5f, scaleMin = 0.85f, scaleMax = 1.3f },
-                new ScatterRule(PropRole.PineTree, B(0f, 0.15f, 0.45f, 0f), 45f, 2.5f) { maxSlope = 0.9f, clump = 0.6f, scaleMin = 0.85f, scaleMax = 1.35f },
-                new ScatterRule(PropRole.DeadTree, B(0.05f, 0.05f, 0.1f, 0f, 0.4f), 0.4f, 3f) { maxSlope = 0.7f, clump = 0.5f },
-                new ScatterRule(PropRole.FruitTree, B(0.6f, 0f, 0f, 1f), 6f, 3.5f) { maxSlope = 0.35f, nearSettlement = 80f, clump = 0.4f, scaleMin = 0.9f, scaleMax = 1.2f },
+                new ScatterRule(PropRole.ForestTree, B(0.02f, 1f, 0.1f, 0f), 140f, 2.2f) { maxSlope = 0.8f, scaleMin = 0.8f, scaleMax = 1.3f, maxHeight = broadleaf, heightFade = 0.1f },
+                new ScatterRule(PropRole.MeadowTree, B(1f, 0f, 0.4f, 0.1f, 0.5f), 2.5f, 3.5f) { maxSlope = 0.6f, clump = 0.5f, scaleMin = 0.85f, scaleMax = 1.3f, maxHeight = broadleaf, heightFade = 0.1f },
+                new ScatterRule(PropRole.PineTree, B(0f, 0.15f, 0.45f, 0f), 45f, 2.5f) { maxSlope = 0.9f, clump = 0.6f, scaleMin = 0.85f, scaleMax = 1.35f, maxHeight = conifer, heightFade = 0.2f },
+                new ScatterRule(PropRole.DeadTree, B(0.05f, 0.05f, 0.1f, 0f, 0.4f), 0.4f, 3f) { maxSlope = 0.7f, clump = 0.5f, maxHeight = conifer, heightFade = 0.1f },
+                new ScatterRule(PropRole.FruitTree, B(0.6f, 0f, 0f, 1f), 6f, 3.5f) { maxSlope = 0.35f, nearSettlement = 80f, clump = 0.4f, scaleMin = 0.9f, scaleMax = 1.2f, maxHeight = broadleaf, heightFade = 0.1f },
 
-                // Highland: outcrops, cliffs on steep slopes, mounds.
-                new ScatterRule(PropRole.DirtCliff, B(1f, 0.6f, 0.3f, 0f), 3f, 5f) { minSlope = 0.75f, scaleMin = 0.9f, scaleMax = 1.4f },
-                new ScatterRule(PropRole.GroundCliff, B(0.6f, 0.4f, 1f, 0f), 1.5f, 9f) { minSlope = 0.95f, scaleMin = 0.9f, scaleMax = 1.4f },
-                new ScatterRule(PropRole.Cliff, B(0.7f, 0.5f, 1f, 0f), 7f, 4.5f) { minSlope = 0.7f, scaleMin = 0.9f, scaleMax = 1.6f },
-                new ScatterRule(PropRole.RockGround, B(0.1f, 0f, 1f, 0f), 1.8f, 4f) { minSlope = 0.2f, clump = 0.4f, scaleMin = 0.8f, scaleMax = 1.4f },
-                new ScatterRule(PropRole.Mound, B(0.15f, 0f, 1f, 0f), 0.35f, 10f) { maxSlope = 0.35f, scaleMin = 0.8f, scaleMax = 1.2f },
+                // Highland: cliff blocks against steep slopes, outcrops, mounds. Rock-like families are placed by RockPlacer from
+                // their measured shape: sized in metres, sunk into the ground, cliffs only where higher ground backs them. Only
+                // Meadow pieces (one rock look, matching the RockWall terrain layer) are used in the range; the dark Generic dirt
+                // cliffs stay on lowland escarpments; the Ground_Cliff_Large mesas are not scattered (they only fit level ground).
+                new ScatterRule(PropRole.DirtCliff, B(1f, 0.6f, 0f, 0f), 2f, 5f) { minSlope = 0.75f, maxHeight = 0.42f, heightFade = 0.08f, heightMin = 3f, heightMax = 6.5f, sizeBias = 1.5f },
+                new ScatterRule(PropRole.Cliff, B(0.5f, 0.35f, 1f, 0f), 7f, 4.5f) { minSlope = 0.75f, heightMin = 3f, heightMax = 8f, sizeBias = 1.8f },
+                new ScatterRule(PropRole.RockGround, B(0.1f, 0f, 1f, 0f), 1.8f, 4f) { minSlope = 0.15f, maxSlope = 0.9f, clump = 0.4f, heightMin = 1.2f, heightMax = 3.2f },
+                new ScatterRule(PropRole.Mound, B(0.15f, 0f, 1f, 0f), 0.35f, 10f) { maxSlope = 0.12f, heightMin = 1.5f, heightMax = 3.2f },
 
                 // Forest floor.
                 new ScatterRule(PropRole.Bush, B(0.12f, 0.6f, 0.1f, 0.05f, 0.4f), 16f, 1.4f) { maxSlope = 0.8f, clump = 0.3f },
-                new ScatterRule(PropRole.RockPile, B(0.08f, 0.5f, 0.5f, 0f), 2.5f, 1.8f) { clump = 0.3f },
+                new ScatterRule(PropRole.RockPile, B(0.08f, 0.5f, 0.5f, 0f), 2.5f, 1.8f) { clump = 0.3f, heightMin = 1.2f, heightMax = 3.5f, sizeBias = 1.5f },
                 new ScatterRule(PropRole.Shrub, B(0.05f, 0.7f, 0.15f, 0f, 0.3f), 10f, 1f) { maxSlope = 0.8f, clump = 0.5f },
                 new ScatterRule(PropRole.Stump, B(0.02f, 1f, 0.1f, 0f), 4f, 1.2f) { maxSlope = 0.6f, clump = 0.3f },
                 new ScatterRule(PropRole.Twig, B(0f, 1f, 0f, 0f), 5f, 0.6f) { maxSlope = 0.6f },
@@ -88,8 +109,9 @@ namespace MedievalZen.World
                 new ScatterRule(PropRole.Mushroom, B(0.02f, 1f, 0f, 0f), 9f, 0.4f) { maxSlope = 0.6f, clump = 0.6f },
 
                 // Meadow and shore rocks.
-                new ScatterRule(PropRole.Rock, B(1f, 0.25f, 0.8f, 0.1f, 1f), 1.6f, 1.3f) { clump = 0.5f, scaleMin = 0.7f, scaleMax = 1.4f },
-                new ScatterRule(PropRole.RockSmallPile, B(1f, 0.2f, 0.6f, 0.4f, 0.6f), 1.8f, 0.8f) { clump = 0.3f },
+                new ScatterRule(PropRole.Rock, B(0.6f, 0.2f, 1f, 0.05f, 0.6f), 1.6f, 1.3f) { clump = 0.5f, heightMin = 0.6f, heightMax = 2.5f, sizeBias = 1.4f },
+                new ScatterRule(PropRole.LowlandRock, B(0.8f, 0.2f, 0f, 0.1f, 0.8f), 1f, 1.3f) { clump = 0.5f, maxHeight = 0.4f, heightFade = 0.08f, heightMin = 0.6f, heightMax = 2f, sizeBias = 1.4f },
+                new ScatterRule(PropRole.RockSmallPile, B(1f, 0.2f, 0.6f, 0.4f, 0.6f), 1.8f, 0.8f) { clump = 0.3f, heightMin = 0.15f, heightMax = 0.4f },
 
                 // Sunflower clusters in meadows (strongly clumped so they read as yellow patches).
                 new ScatterRule(PropRole.Sunflower, B(0.9f, 0f, 0f, 0.6f), 3f, 0.5f) { maxSlope = 0.3f, clump = 0.9f, scaleMin = 0.9f, scaleMax = 1.15f },
