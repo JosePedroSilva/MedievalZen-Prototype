@@ -14,6 +14,8 @@ namespace MedievalZen.World
         Pass = 2,
         /// <summary>A lookout beside the pass road with a view over the lowland.</summary>
         Viewpoint = 3,
+        /// <summary>A built or ancient landmark off the road (endless road: tower, chapel, windmill, standing stones, ruin); position = its foot.</summary>
+        Structure = 4,
     }
 
     /// <summary>A named landmark for the map (the parchment map draws a symbol and a label for each).</summary>

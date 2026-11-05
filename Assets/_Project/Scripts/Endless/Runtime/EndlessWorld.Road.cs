@@ -24,6 +24,19 @@ namespace MedievalZen.Endless
         /// <summary>A new region is announced once the traveller is this far inside it.</summary>
         private const double RegionHysteresis = 20.0;
 
+        /// <summary>
+        /// The region waypoints (places, landmarks and their best view, crossings) are built on a worker this far each way round the
+        /// traveller, so the main-thread searches (the HUD's inn finder, 8 km; the Journey menu's village finder, 12 km; the nature
+        /// and people updates, 1.5 km) never build a region cold (2026-10-06 stall hunt: 40–330 ms per search cold in .NET).
+        /// </summary>
+        public const double WaypointWarmReach = InnFinder.WarmReach;
+
+        /// <summary>The warmer runs again once the traveller is this far from where it last ran.</summary>
+        private const double WaypointWarmStep = 1000.0;
+
+        private Task waypointWarm;
+        private double waypointWarmedAt = double.NaN;
+
         private double travellerS;
         private float nextTrack;
         private RoadWindow window;
@@ -137,9 +150,12 @@ namespace MedievalZen.Endless
         {
             if (!force && Time.unscaledTime < nextInnCheck) return;
             nextInnCheck = Time.unscaledTime + 1f;
+            // Never build regions cold here: keep the last answer until the worker has warmed the search range.
+            bool ready = force || InnFinder.Ready(generator, travellerS, InnSearchLimit);
+            if (!ready) WarmWaypointsAround(travellerS, false);
             bool crossed = (innAhead != null && travellerS >= innAhead.S - InnFinder.DefaultSkip) ||
                            (innBehind != null && travellerS <= innBehind.S + InnFinder.DefaultSkip);
-            if (force || crossed || double.IsNaN(innCacheS) || Math.Abs(travellerS - innCacheS) > 400.0)
+            if (ready && (force || crossed || double.IsNaN(innCacheS) || Math.Abs(travellerS - innCacheS) > 400.0))
             {
                 innCacheS = travellerS;
                 innAhead = InnFinder.Find(generator, travellerS, +1);
@@ -220,6 +236,7 @@ namespace MedievalZen.Endless
                 return;
             }
 
+            WarmWaypointsAround(travellerS, false);
             UpdateInns(false);
             if (Time.unscaledTime < nextWindowCheck) return;
             nextWindowCheck = Time.unscaledTime + 0.5f;
@@ -232,14 +249,19 @@ namespace MedievalZen.Endless
             windowJob = Task.Run(() => RoadWindow.Build(gen, a, b, ox, oz));
         }
 
+        private static readonly int CostRebuildWindow = Review.FrameCost.Register("EndlessWorld.RebuildWindowNow (sync)");
+
         /// <summary>Builds the window on the main thread right away (start, Go now, an inn outside the window).</summary>
         private void RebuildWindowNow(double include = double.NaN)
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostRebuildWindow);   // stall hunt: the per-frame culprit
             UpdateInns(true);
             WindowRange(out double a, out double b, include);
             windowJob = null;
             ApplyWindow(window, RoadWindow.Build(generator, a, b, origin.X, origin.Z), Vector3.zero);
         }
+
+        private static readonly int CostApplyWindow = Review.FrameCost.Register("EndlessWorld.ApplyWindow");
 
         /// <summary>
         /// Gives the GameWorld the new window and keeps an ongoing trip going to the same inn in it (re-routed in place, no
@@ -247,6 +269,7 @@ namespace MedievalZen.Endless
         /// </summary>
         private void ApplyWindow(RoadWindow previous, RoadWindow next, Vector3 delta)
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostApplyWindow);   // stall hunt: the per-frame culprit
             Waypoint destination = previous != null && travel != null ? previous.WaypointOf(travel.Destination) : null;
             window = next;
             world.SetRoads(next.Network);
@@ -259,9 +282,12 @@ namespace MedievalZen.Endless
 
         // ------------------------------------------------------------------ travel (T)
 
+        private static readonly int CostPick = Review.FrameCost.Register("EndlessWorld.PickDestination");
+
         /// <inheritdoc />
         public Settlement PickDestination(PlayerTravel player, out string notice)
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostPick);   // stall hunt: the per-frame culprit
             notice = null;
             if (startup || scripted || generator == null) return null;
             RoadPoint here = generator.Road(travellerS);
@@ -280,12 +306,45 @@ namespace MedievalZen.Endless
             return settlement;
         }
 
+        /// <summary>The HUD's inn finder searches this far each way.</summary>
+        private const double InnSearchLimit = 8000.0;
+
+        /// <summary>
+        /// Starts a worker that builds the region waypoints <see cref="WaypointWarmReach"/> each way round <paramref name="s"/>
+        /// (when none is running and the traveller has moved <see cref="WaypointWarmStep"/> since the last, or <paramref name="force"/>).
+        /// </summary>
+        private void WarmWaypointsAround(double s, bool force)
+        {
+            if (!(generator is Generation.EndlessGenerator g)) return;
+            if (waypointWarm != null && !waypointWarm.IsCompleted) return;
+            if (!force && !double.IsNaN(waypointWarmedAt) && Math.Abs(s - waypointWarmedAt) < WaypointWarmStep) return;
+            waypointWarmedAt = s;
+            double a = s - WaypointWarmReach, b = s + WaypointWarmReach;
+            waypointWarm = Task.Run(() => g.WarmWaypoints(a, b));
+        }
+
+        /// <summary>
+        /// Warms the waypoints round <paramref name="s"/> on a worker and waits for them (at most <paramref name="timeout"/> seconds),
+        /// for a teleport behind the black screen: the searches that follow it then read cached regions only.
+        /// </summary>
+        private System.Collections.IEnumerator WarmWaypointsBefore(double s, float timeout = 15f)
+        {
+            float began = Time.unscaledTime;
+            while (waypointWarm != null && !waypointWarm.IsCompleted && Time.unscaledTime - began < timeout) yield return null;
+            WarmWaypointsAround(s, true);
+            while (waypointWarm != null && !waypointWarm.IsCompleted && Time.unscaledTime - began < timeout) yield return null;
+        }
+
         // ------------------------------------------------------------------ landmarks for the shared systems
+
+        private static readonly int CostNature = Review.FrameCost.Register("EndlessWorld.UpdateNature");
 
         private void UpdateNature(bool force)
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostNature);   // stall hunt: the per-frame culprit
             if (!force && Time.unscaledTime < nextNature) return;
             nextNature = Time.unscaledTime + 2f;
+            if (!force && generator is Generation.EndlessGenerator cached && !cached.WaypointsCached(travellerS - 1500.0, travellerS + 1500.0)) return;
             var found = new List<Waypoint>();
             generator.Waypoints(travellerS - 1500.0, travellerS + 1500.0, found);
             var landmarks = new List<Landmark>();
@@ -300,6 +359,7 @@ namespace MedievalZen.Endless
                     case WaypointKind.Lake: kind = LandmarkKind.Lake; break;
                     case WaypointKind.Pass: kind = LandmarkKind.Pass; break;
                     case WaypointKind.Viewpoint: kind = LandmarkKind.Viewpoint; break;
+                    case WaypointKind.Landmark: kind = LandmarkKind.Structure; break;
                     default: continue;
                 }
 

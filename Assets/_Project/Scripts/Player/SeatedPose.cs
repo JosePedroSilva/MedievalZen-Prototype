@@ -151,8 +151,11 @@ namespace MedievalZen.Player
             return usable;
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("SeatedPose");
+
         private void LateUpdate()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             float weight = seat != null && seat.IsActive ? seat.Weight : 0f;
             if (weight <= 0f)
             {

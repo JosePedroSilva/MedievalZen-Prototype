@@ -28,10 +28,20 @@ namespace MedievalZen.Endless
         /// <summary>Shadows cast by the instanced trees.</summary>
         public bool treeShadows;
 
+        /// <summary>Animals along the road (<c>MedievalZen.Wildlife.WildlifeManager</c>).</summary>
+        public bool animals;
+
+        /// <summary>
+        /// The forest pass's extras: ferns, undergrowth and ivy on the walkable tiles, sun shafts, dust and mist among the trunks,
+        /// and the deeper haze and grade under the canopy. The first thing the safety ladder sheds (before any tree).
+        /// </summary>
+        public bool forestExtras;
+
         /// <summary>Everything on.</summary>
         public static EndlessFeatures All => new EndlessFeatures
         {
-            farTiles = true, farTrees = true, nearTrees = true, grassDetails = true, props = true, water = true, treeShadows = true,
+            farTiles = true, farTrees = true, nearTrees = true, grassDetails = true, props = true, water = true, treeShadows = true, animals = true,
+            forestExtras = true,
         };
 
         /// <summary>What is on in both.</summary>
@@ -44,6 +54,8 @@ namespace MedievalZen.Endless
             props = a.props && b.props,
             water = a.water && b.water,
             treeShadows = a.treeShadows && b.treeShadows && a.nearTrees && b.nearTrees,
+            animals = a.animals && b.animals,
+            forestExtras = a.forestExtras && b.forestExtras,
         };
 
         /// <summary>Compact list for the log and overlay, e.g. "farTiles+ farTrees- nearTrees+ …".</summary>
@@ -57,6 +69,8 @@ namespace MedievalZen.Endless
             Flag(s, "props", props);
             Flag(s, "water", water);
             Flag(s, "treeShadows", treeShadows);
+            Flag(s, "animals", animals);
+            Flag(s, "forestExtras", forestExtras);
             return s.ToString().TrimEnd();
         }
 
@@ -102,14 +116,15 @@ namespace MedievalZen.Endless
     /// <summary>
     /// The self-diagnosing safety ladder (pure, unit tested; the breadcrumb file I/O lives in <see cref="EndlessWorld"/>).
     /// A run that dies during start-up or within <see cref="RunningOkSeconds"/> of rendering starts the next run one level
-    /// lower: 0 everything; 1 no distant trees; 2 no distant tiles; 3 also no near trees; 4 also no grass; 5 ground, road and
-    /// player only (no props, no water). A run that reaches "running OK" or ends cleanly keeps its level; the menu
+    /// lower: 0 everything; 1 no forest extras (ferns, undergrowth, ivy, forest light and mist: shed before any tree); 2 also no
+    /// distant trees; 3 no distant tiles; 4 also no near trees or animals; 5 also no grass; 6 ground, road and player only (no props,
+    /// no water). A run that reaches "running OK" or ends cleanly keeps its level; the menu
     /// MedievalZen/Endless Road/Reset Safety Level returns to 0.
     /// </summary>
     public static class SafetyLadder
     {
         /// <summary>The lowest rung.</summary>
-        public const int MaxLevel = 5;
+        public const int MaxLevel = 6;
 
         /// <summary>Seconds of rendering after which a run counts as "running OK".</summary>
         public const float RunningOkSeconds = 20f;
@@ -154,16 +169,18 @@ namespace MedievalZen.Endless
         {
             level = Clamp(level);
             EndlessFeatures f = EndlessFeatures.All;
-            if (level >= 1) f.farTrees = false;
-            if (level >= 2) f.farTiles = false;
-            if (level >= 3)
+            if (level >= 1) f.forestExtras = false;
+            if (level >= 2) f.farTrees = false;
+            if (level >= 3) f.farTiles = false;
+            if (level >= 4)
             {
                 f.nearTrees = false;
                 f.treeShadows = false;
+                f.animals = false;
             }
 
-            if (level >= 4) f.grassDetails = false;
-            if (level >= 5)
+            if (level >= 5) f.grassDetails = false;
+            if (level >= 6)
             {
                 f.props = false;
                 f.water = false;
@@ -178,11 +195,12 @@ namespace MedievalZen.Endless
             switch (Clamp(level))
             {
                 case 0: return "with everything";
-                case 1: return "without distant trees";
-                case 2: return "without distant tiles";
-                case 3: return "without distant tiles or near trees";
-                case 4: return "without distant tiles, near trees or grass";
-                default: return "with ground, road and player only (no distant tiles, trees, grass, props or water)";
+                case 1: return "without the forest extras";
+                case 2: return "without the forest extras or distant trees";
+                case 3: return "without the forest extras or distant tiles";
+                case 4: return "without the forest extras, distant tiles, near trees or animals";
+                case 5: return "without the forest extras, distant tiles, near trees, animals or grass";
+                default: return "with ground, road and player only (no distant tiles, trees, animals, grass, props or water)";
             }
         }
 

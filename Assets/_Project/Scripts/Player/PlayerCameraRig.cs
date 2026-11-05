@@ -346,6 +346,10 @@ namespace MedievalZen.Player
             else
             {
                 baseFieldOfView = viewCamera.fieldOfView;
+                // A single NaN pixel from any shader is turned by bloom into a white glow over half the screen (the streams, twice).
+                // URP's Stop NaNs pass replaces NaN and infinite pixels before post-processing: one cheap full-screen pass.
+                var cameraData = viewCamera.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+                if (cameraData != null) cameraData.stopNaN = true;
             }
 
             if (visualRoot != null)
@@ -382,8 +386,11 @@ namespace MedievalZen.Player
             if (hasFocus && CursorLocked) SetCursorLocked(true);
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("PlayerCameraRig");
+
         private void LateUpdate()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (cameraTransform == null) return;
             float dt = Time.deltaTime;
 

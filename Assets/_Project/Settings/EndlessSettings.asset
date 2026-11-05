@@ -28,3 +28,17 @@ MonoBehaviour:
   applyBudgetMs: 2.5
   workerCount: 3
   originShiftDistance: 4000
+  treeFullDetailDistance: 110
+  treeMidDetailDistance: 300
+  treeDetailScale: 1
+  treeShadowDistance: 300
+  treeShadowProxyDistance: 100
+  plantShadowDistance: 40
+  fernDrawDistance: 160
+  undergrowthDrawDistance: 250
+  treeShadowCasterCulling: 1
+  treeWalkReuse: 1
+  treeImpostorDistance: 320
+  treeImpostorMaxPixels: 3
+  settingsVersion: 3
+  midDistance: 1000

@@ -30,6 +30,13 @@ namespace MedievalZen.Tests
             CinematicWhenTravelling = false,
             Letterbox = false,
             HudAlways = true,
+            MasterVolume = 0.9f,
+            AmbienceVolume = 0.5f,
+            MusicVolume = 0.25f,
+            FootstepVolume = 0.4f,
+            MusicFrequency = MedievalZen.Sound.MusicFrequency.Often,
+            MusicTitles = false,
+            WalkingPace = 1.3f,
         };
 
         [Test]
@@ -140,7 +147,146 @@ namespace MedievalZen.Tests
             Assert.That(read.CinematicWhenTravelling, Is.True);
             Assert.That(read.Letterbox, Is.True);
             Assert.That(read.HudAlways, Is.False);
-            StringAssert.StartsWith("{\"version\":2,", read.ToJson(), "re-stamped as version 2 on the next save");
+            StringAssert.StartsWith("{\"version\":" + JourneySettings.CurrentVersion + ",", read.ToJson(), "re-stamped as the current version on the next save");
+        }
+
+        [Test]
+        public void VersionTwoBlobLoadsWithTheAnimalDefaults()
+        {
+            // A blob saved before the animals existed (version 2): every old field is read, the animal ones default.
+            string v2 = "{\"version\":2,\"flow\":\"Slow\",\"weather\":\"Auto\",\"fog\":1,\"haze\":1,\"clouds\":1,\"wind\":true," +
+                        "\"windVolume\":0.1,\"camera\":\"ThirdPerson\",\"lookSpeed\":1,\"invertY\":false,\"showHud\":true,\"cinematic\":true," +
+                        "\"cinematicTravel\":true,\"letterbox\":false,\"hudAlways\":false,\"animals\":false,\"animalVolume\":0.9}";
+            Assert.That(JourneySettings.TryFromJson(v2, new JourneySettings(), out JourneySettings read), Is.True);
+            Assert.That(read.Flow, Is.EqualTo(FlowOfTime.Slow));
+            Assert.That(read.CinematicCamera, Is.True);
+            Assert.That(read.Letterbox, Is.False);
+            Assert.That(read.Animals, Is.True, "keys a version-2 blob could not have written are ignored");
+            Assert.That(read.AnimalVolume, Is.EqualTo(0.5f));
+            StringAssert.StartsWith("{\"version\":" + JourneySettings.CurrentVersion + ",", read.ToJson(), "re-stamped as the current version");
+        }
+
+        [Test]
+        public void AnimalChoicesRoundTripClampAndCountForSameAs()
+        {
+            var a = new JourneySettings { Animals = false, AnimalVolume = 0.25f };
+            string json = a.ToJson();
+            StringAssert.Contains("\"animals\":false", json);
+            StringAssert.Contains("\"animalVolume\":0.25", json);
+            Assert.That(JourneySettings.TryFromJson(json, new JourneySettings(), out JourneySettings read), Is.True);
+            Assert.That(read.SameAs(a), Is.True);
+            Assert.That(new JourneySettings().SameAs(a), Is.False);
+            var defaults = new JourneySettings();
+            Assert.That(defaults.Animals, Is.True, "animals are shown by default");
+            Assert.That(defaults.AnimalVolume, Is.EqualTo(0.5f));
+            var wild = new JourneySettings { AnimalVolume = 7f }.Clamp();
+            Assert.That(wild.AnimalVolume, Is.EqualTo(1f));
+            Assert.That(new JourneySettings { AnimalVolume = float.NaN }.Clamp().AnimalVolume, Is.EqualTo(0.5f));
+        }
+
+        [Test]
+        public void VersionFourBlobLoadsWithTheSoundDefaults()
+        {
+            // A blob saved before the sound page existed (version 4): every old field is read, the sound ones default.
+            string v4 = "{\"version\":4,\"flow\":\"Slow\",\"weather\":\"Auto\",\"fog\":1,\"haze\":1,\"clouds\":1,\"wind\":true," +
+                        "\"windVolume\":0.1,\"camera\":\"ThirdPerson\",\"lookSpeed\":1,\"invertY\":false,\"showHud\":true,\"cinematic\":false," +
+                        "\"cinematicTravel\":true,\"letterbox\":true,\"hudAlways\":false,\"animals\":false,\"animalVolume\":0.3,\"richLight\":false," +
+                        "\"master\":0.1,\"music\":0,\"musicFrequency\":\"Often\",\"musicTitles\":false}";
+            Assert.That(JourneySettings.TryFromJson(v4, new JourneySettings(), out JourneySettings read), Is.True);
+            Assert.That(read.Flow, Is.EqualTo(FlowOfTime.Slow));
+            Assert.That(read.Animals, Is.False);
+            Assert.That(read.AnimalVolume, Is.EqualTo(0.3f).Within(1e-5f));
+            Assert.That(read.RichLight, Is.False);
+            Assert.That(read.MasterVolume, Is.EqualTo(1f), "keys a version-4 blob could not have written are ignored");
+            Assert.That(read.AmbienceVolume, Is.EqualTo(MedievalZen.Sound.SoundMix.DefaultAmbience));
+            Assert.That(read.MusicVolume, Is.EqualTo(MedievalZen.Sound.SoundMix.DefaultMusic));
+            Assert.That(read.FootstepVolume, Is.EqualTo(MedievalZen.Sound.SoundMix.DefaultFootsteps));
+            Assert.That(read.MusicFrequency, Is.EqualTo(MedievalZen.Sound.MusicFrequency.Rare));
+            Assert.That(read.MusicTitles, Is.True);
+            StringAssert.StartsWith("{\"version\":" + JourneySettings.CurrentVersion + ",", read.ToJson(), "re-stamped as the current version");
+        }
+
+        [Test]
+        public void VersionFiveBlobLoadsWithPaceOne()
+        {
+            // A blob saved before the walking pace existed (version 5): every old field is read, the pace is 1.
+            string v5 = "{\"version\":5,\"flow\":\"Slow\",\"weather\":\"Auto\",\"fog\":1,\"haze\":1,\"clouds\":1,\"wind\":true," +
+                        "\"windVolume\":0.1,\"camera\":\"ThirdPerson\",\"lookSpeed\":1,\"invertY\":false,\"showHud\":true,\"cinematic\":false," +
+                        "\"cinematicTravel\":true,\"letterbox\":true,\"hudAlways\":false,\"animals\":true,\"animalVolume\":0.5,\"richLight\":true," +
+                        "\"master\":0.7,\"ambience\":0.8,\"music\":0.8,\"footsteps\":0.7,\"musicFrequency\":\"Often\",\"musicTitles\":true,\"walkPace\":0.6}";
+            Assert.That(JourneySettings.TryFromJson(v5, new JourneySettings(), out JourneySettings read), Is.True);
+            Assert.That(read.Flow, Is.EqualTo(FlowOfTime.Slow));
+            Assert.That(read.MasterVolume, Is.EqualTo(0.7f).Within(1e-5f));
+            Assert.That(read.MusicFrequency, Is.EqualTo(MedievalZen.Sound.MusicFrequency.Often));
+            Assert.That(read.WalkingPace, Is.EqualTo(1f), "keys a version-5 blob could not have written are ignored");
+            StringAssert.StartsWith("{\"version\":" + JourneySettings.CurrentVersion + ",", read.ToJson(), "re-stamped as the current version");
+            Assert.That(JourneySettings.CurrentVersion, Is.GreaterThanOrEqualTo(6));
+        }
+
+        [Test]
+        public void WalkingPaceRoundTripsClampsAndCountsForSameAs()
+        {
+            var defaults = new JourneySettings();
+            Assert.That(defaults.WalkingPace, Is.EqualTo(1f));
+            var a = new JourneySettings { WalkingPace = 0.7f };
+            string json = a.ToJson();
+            StringAssert.Contains("\"walkPace\":0.7", json);
+            Assert.That(JourneySettings.TryFromJson(json, new JourneySettings(), out JourneySettings read), Is.True);
+            Assert.That(read.SameAs(a), Is.True, json);
+            Assert.That(read.WalkingPace, Is.EqualTo(0.7f).Within(1e-6f));
+            Assert.That(defaults.SameAs(a), Is.False);
+            Assert.That(new JourneySettings { WalkingPace = 3f }.Clamp().WalkingPace, Is.EqualTo(1.5f));
+            Assert.That(new JourneySettings { WalkingPace = 0.12f }.Clamp().WalkingPace, Is.EqualTo(0.5f));
+            Assert.That(new JourneySettings { WalkingPace = float.NaN }.Clamp().WalkingPace, Is.EqualTo(1f), "NaN falls back to the default");
+            Assert.That(new JourneySettings { WalkingPace = 1.26f }.Clamp().WalkingPace, Is.EqualTo(1.3f).Within(1e-6f), "snapped to a step");
+            Assert.That(JourneySettings.TryFromJson("{\"version\":6,\"walkPace\":9}", new JourneySettings(), out JourneySettings wild), Is.True);
+            Assert.That(wild.WalkingPace, Is.EqualTo(1.5f));
+            Assert.That(JourneySettings.TryFromJson("{\"version\":6,\"walkPace\":\"fast\"}", new JourneySettings(), out JourneySettings typed), Is.True);
+            Assert.That(typed.WalkingPace, Is.EqualTo(1f), "a value of the wrong type is skipped");
+        }
+
+        [Test]
+        public void SoundChoicesRoundTripClampAndCountForSameAs()
+        {
+            var a = new JourneySettings
+            {
+                MasterVolume = 0.6f, AmbienceVolume = 0.35f, MusicVolume = 0f, FootstepVolume = 0.95f,
+                MusicFrequency = MedievalZen.Sound.MusicFrequency.Sometimes, MusicTitles = false,
+            };
+            string json = a.ToJson();
+            StringAssert.Contains("\"master\":0.6", json);
+            StringAssert.Contains("\"ambience\":0.35", json);
+            StringAssert.Contains("\"music\":0", json);
+            StringAssert.Contains("\"footsteps\":0.95", json);
+            StringAssert.Contains("\"musicFrequency\":\"Sometimes\"", json);
+            StringAssert.Contains("\"musicTitles\":false", json);
+            Assert.That(JourneySettings.TryFromJson(json, new JourneySettings(), out JourneySettings read), Is.True);
+            Assert.That(read.SameAs(a), Is.True, json);
+            Assert.That(new JourneySettings().SameAs(a), Is.False);
+            foreach (MedievalZen.Sound.MusicFrequency f in new[] { MedievalZen.Sound.MusicFrequency.Off, MedievalZen.Sound.MusicFrequency.Often })
+            {
+                var b = new JourneySettings { MusicFrequency = f };
+                Assert.That(new JourneySettings().SameAs(b), Is.False, f.ToString());
+                Assert.That(JourneySettings.TryFromJson(b.ToJson(), new JourneySettings(), out JourneySettings c) && c.MusicFrequency == f, Is.True);
+            }
+
+            var defaults = new JourneySettings();
+            Assert.That(defaults.MasterVolume, Is.EqualTo(1f));
+            Assert.That(defaults.MusicFrequency, Is.EqualTo(MedievalZen.Sound.MusicFrequency.Rare), "the user's choice: music is rare");
+            Assert.That(defaults.MusicTitles, Is.True);
+            var wild = new JourneySettings
+            {
+                MasterVolume = 3f, AmbienceVolume = -1f, MusicVolume = float.NaN, FootstepVolume = 9f,
+                MusicFrequency = (MedievalZen.Sound.MusicFrequency)12,
+            }.Clamp();
+            Assert.That(wild.MasterVolume, Is.EqualTo(1f));
+            Assert.That(wild.AmbienceVolume, Is.EqualTo(0f));
+            Assert.That(wild.MusicVolume, Is.EqualTo(MedievalZen.Sound.SoundMix.DefaultMusic), "NaN falls back to the default");
+            Assert.That(wild.FootstepVolume, Is.EqualTo(1f));
+            Assert.That(wild.MusicFrequency, Is.EqualTo(MedievalZen.Sound.MusicFrequency.Rare));
+            string numeric = "{\"version\":5,\"musicFrequency\":\"3\"}";
+            Assert.That(JourneySettings.TryFromJson(numeric, new JourneySettings(), out JourneySettings n), Is.True);
+            Assert.That(n.MusicFrequency, Is.EqualTo(MedievalZen.Sound.MusicFrequency.Rare), "enums by name only");
         }
 
         [Test]

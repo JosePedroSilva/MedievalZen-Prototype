@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The same MonoRunner.cs on CoreCLR (.NET 8), to compare runtimes on one build of the assemblies. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="../MonoRunner.cs" /></ItemGroup>
+</Project>

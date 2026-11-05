@@ -23,6 +23,12 @@ namespace MedievalZen.Endless.Generation
         Camp = 6,
         /// <summary>Milestone.</summary>
         Milestone = 7,
+        /// <summary>A ford where a brook crosses the road.</summary>
+        Ford = 8,
+        /// <summary>A footbridge over a stream.</summary>
+        Bridge = 9,
+        /// <summary>A landmark off the road (see <see cref="LandmarkPlan"/>).</summary>
+        Landmark = 10,
     }
 
     /// <summary>A place along the road (settlement, lake, feature). Immutable after creation.</summary>
@@ -53,6 +59,12 @@ namespace MedievalZen.Endless.Generation
         /// touch); the road is level over it, so no stretch of road in a tile with this lake's water plane can be flooded.
         /// </summary>
         public double FlatFrom, FlatTo;
+        /// <summary>
+        /// A walled city (2026-10-06) in the slot of a planned village or hamlet: <see cref="Kind"/> is then <see cref="PlaceKind.Village"/>
+        /// (so everything that treats villages treats it), <see cref="Radius"/> <see cref="JourneyPlan.CityRadius"/>, and the waypoint is
+        /// <see cref="WaypointKind.City"/>. See <see cref="JourneyPlan.IsCitySlot"/>.
+        /// </summary>
+        public bool City;
 
         /// <summary>True for inns, hamlets and villages.</summary>
         public bool IsSettlement => Kind == PlaceKind.Inn || Kind == PlaceKind.Hamlet || Kind == PlaceKind.Village;
@@ -95,10 +107,14 @@ namespace MedievalZen.Endless.Generation
             this.p = p;
             Regions = regions;
             this.road = road;
+            Crossings = new StreamPlan(p, regions, this);
         }
 
         /// <summary>The region sequence.</summary>
         public RegionSequence Regions { get; }
+
+        /// <summary>The schedule of stream crossings (their level stretches are part of <see cref="FlatZones"/>).</summary>
+        public StreamPlan Crossings { get; }
 
         /// <summary>Stable waypoint id from a kind and a kind-specific index (never -1).</summary>
         public static int MakeId(PlaceKind kind, long index) => unchecked((int)(index * 16 + (int)kind));
@@ -297,7 +313,81 @@ namespace MedievalZen.Endless.Generation
                 Name = SettlementNames.PlaceAt(p.seed, r.Index * 2 + 1),
                 Region = r.Index,
             };
+            if (IsCitySlot(r, place.S, place.Radius))
+            {
+                // The slot keeps its road distance, id and region; only what stands there changes (see IsCitySlot).
+                place.City = true;
+                place.Kind = PlaceKind.Village;
+                place.Radius = CityRadius;
+                place.Name = SettlementNames.CityAt(p.seed, r.Index);
+            }
+
             list.Add(place);
+        }
+
+        // ------------------------------------------------------------------ walled cities
+
+        /// <summary>
+        /// Footprint radius of a walled city: the terrain disc is level within 0.85 of it (106 m), which holds the whole wall (at most
+        /// 100 m out, its towers 2.5 m more; see <see cref="CityComposer"/>). 160 m until the town was built up inside a tighter wall.
+        /// The castle's rock reaches beyond it (to about 150 m out across the road) and levels its own top (<see cref="CityHill.Rock"/>):
+        /// a larger radius would lengthen the city's level road and move the heights of places beyond it (1.4 m at 160 m).
+        /// </summary>
+        public const float CityRadius = 125f;
+
+        /// <summary>Least distance from a city slot to an inn and to its region's ends: the level road (Radius + 30 m each way) and an inn's never meet.</summary>
+        public const double CityClearance = 360.0;
+
+        /// <summary>No city before this road distance (the journey starts in open country).</summary>
+        public const double CityFirstFrom = 10000.0;
+
+        /// <summary>Least road distance between two cities.</summary>
+        public const double CityGap = 25000.0;
+
+        /// <summary>A city's farmland region must be at least this long (the city and its fields stay in open country).</summary>
+        public const double CityRegionMin = 1400.0;
+
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<long, bool> citySlots = new System.Collections.Concurrent.ConcurrentDictionary<long, bool>();
+
+        /// <summary>
+        /// Whether the village or hamlet slot of farmland region <paramref name="r"/> (at road distance <paramref name="s"/>) holds a walled
+        /// city instead. A city takes a slot the plan already has, so no inn, village, landmark or crossing moves: the slot is at least
+        /// <see cref="CityFirstFrom"/> into the journey, its region at least <see cref="CityRegionMin"/> long with the slot <see cref="CityClearance"/> or more inside
+        /// it (never against a wood or a pass), no inn within <see cref="CityClearance"/> (the city's level road, 155 m each way, and an inn's never meet), no stream
+        /// crossing that the larger level stretch would suppress (<see cref="StreamPlan.RawCrossingNear"/>), and the previous city at least
+        /// <see cref="CityGap"/> behind (the chain is decided from the start of the road, so the answer is the same in any window). On seed
+        /// 12345 the first city, Durncaster, is Hollestead's slot (18.5 km); Hartdenfield (11.9 km) stays a village (a stream crossing near).
+        /// </summary>
+        public bool IsCitySlot(Region r, double s, float slotRadius)
+        {
+            if (!p.walledCities || r.Kind != RegionKind.Farmland || s < CityFirstFrom) return false;
+            return citySlots.GetOrAdd(r.Index, _ => CitySlotUncached(r, s, slotRadius));
+        }
+
+        private bool CitySlotUncached(Region r, double s, float slotRadius)
+        {
+            if (r.Length < CityRegionMin || s - r.Start < CityClearance || r.End - s < CityClearance) return false;
+            var inns = new List<Place>();
+            Inns(s - 600.0, s + 600.0, inns);
+            foreach (Place inn in inns)
+            {
+                if (Math.Abs(inn.S - s) < CityClearance) return false;
+            }
+
+            double slack = 30.0 + TerrainShaper.SettlementBlend + 45.0;   // as StreamPlan keeps crossings off a settlement
+            if (Crossings.RawCrossingNear(s, slotRadius + slack, CityRadius + slack)) return false;
+
+            // The previous city: walk back over the farmland regions within the gap (their slots are decided the same way).
+            for (Region q = Regions.Get(r.Index - 1); q.End > s - CityGap && q.End > CityFirstFrom; q = Regions.Get(q.Index - 1))
+            {
+                if (q.Kind != RegionKind.Farmland) continue;
+                foreach (Place other in PlacesOf(q.Index))
+                {
+                    if (other.City && s - other.S < CityGap) return false;
+                }
+            }
+
+            return true;
         }
 
         private void AddLakes(Region r, List<Place> list)
@@ -392,9 +482,17 @@ namespace MedievalZen.Endless.Generation
             }
         }
 
-        /// <summary>Level stretches of road overlapping [s0, s1] (settlements and lake shores), unordered.</summary>
+        /// <summary>Level stretches of road overlapping [s0, s1] (settlements, lake shores and stream crossings), unordered.</summary>
         public void FlatZones(double s0, double s1, List<FlatZone> results)
         {
+            var crossings = new List<Crossing>();
+            Crossings.Crossings(s0 - 50.0, s1 + 50.0, crossings);
+            foreach (Crossing c in crossings)
+            {
+                FlatZone z = c.Flat;
+                if (z.To >= s0 && z.From <= s1) results.Add(z);
+            }
+
             var places = new List<Place>();
             Inns(s0 - 300.0, s1 + 300.0, places);
             RegionPlaces(s0 - 3300.0, s1 + 3300.0, places);

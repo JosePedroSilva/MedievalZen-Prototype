@@ -35,7 +35,7 @@ namespace MedievalZen.World
         public float Dot(BiomeWeights rule)
         {
             float land = meadow * rule.meadow + forest * rule.forest + highland * rule.highland + farm * rule.farm;
-            return Mathf.Clamp01(Mathf.Max(land, shore * rule.shore));
+            return FastMathf.Clamp01(FastMathf.Max(land, shore * rule.shore));
         }
     }
 
@@ -54,6 +54,12 @@ namespace MedievalZen.World
         public float shore;
         /// <summary>Scree weight 0..1 (gentler ground just below a cliff band).</summary>
         public float scree;
+        /// <summary>Endless road: strength of a pass range 0..1 (0 in the finite world and outside the passes).</summary>
+        public float mountain;
+        /// <summary>Endless road: talus 0..1 (scree fans and aprons of the pass walls; 0 in the finite world).</summary>
+        public float talus;
+        /// <summary>Endless road: inside a gully of a pass wall 0..1 (0 in the finite world).</summary>
+        public float gully;
         /// <summary>Biome weights.</summary>
         public BiomeWeights weights;
         /// <summary>Below the lake level.</summary>
@@ -129,15 +135,36 @@ namespace MedievalZen.World
         /// </summary>
         public float[] Scree { get; }
 
+        /// <summary>
+        /// Endless road only (null elsewhere): strength of a pass range 0..1 (its foothills less, every other region 0). See
+        /// <see cref="EnableMountain"/>.
+        /// </summary>
+        public float[] Mountain { get; private set; }
+
+        /// <summary>Endless road only (null elsewhere): talus 0..1, the ground the pass walls shed (scree fans, aprons, gully floors).</summary>
+        public float[] Talus { get; private set; }
+
+        /// <summary>Endless road only (null elsewhere): inside a gully cut into a pass wall 0..1 (1 on its axis).</summary>
+        public float[] Gully { get; private set; }
+
+        /// <summary>Allocates <see cref="Mountain"/>, <see cref="Talus"/> and <see cref="Gully"/> (all 0) for the caller to fill (the endless road).</summary>
+        public void EnableMountain()
+        {
+            int count = Resolution * Resolution;
+            Mountain = new float[count];
+            Talus = new float[count];
+            Gully = new float[count];
+        }
+
         /// <summary>Builds the fields for the (already shaped) <paramref name="relief"/>.</summary>
         public static LandCover Build(WorldGenParams p, Relief relief, IReadOnlyList<SettlementSite> sites, int resolution)
         {
             var cover = new LandCover(resolution, p.worldSize, relief.HasWater ? relief.WaterHeight : -1f);
             float[,] map = relief.Map;
-            float amplitude = Mathf.Max(1e-3f, p.hillAmplitude);
+            float amplitude = FastMathf.Max(1e-3f, p.hillAmplitude);
             var forestNoise = new GradientNoise(p.seed + 4);
             var moistureNoise = new GradientNoise(p.seed + 13);
-            float threshold = Mathf.Lerp(0.32f, -0.32f, Mathf.Clamp01(p.forestDensity));
+            float threshold = FastMathf.Lerp(0.32f, -0.32f, FastMathf.Clamp01(p.forestDensity));
             float texel = cover.TexelSize;
 
             // Farmland only around villages and towns.
@@ -161,11 +188,11 @@ namespace MedievalZen.World
                     cover.Slope[i] = slope;
 
                     float mask = relief.Mask.Evaluate(wx, wz);
-                    float highland = Mathf.Max(Smooth(0.25f, 0.65f, mask) * Smooth(0.3f, 0.5f, hn), Smooth(0.55f, 0.75f, hn));
+                    float highland = FastMathf.Max(Smooth(0.25f, 0.65f, mask) * Smooth(0.3f, 0.5f, hn), Smooth(0.55f, 0.75f, hn));
                     cover.Highland[i] = highland;
 
                     float moisture = 0.47f + 0.9f * moistureNoise.Fbm(wx * 0.0011f, wz * 0.0011f, 3) - 0.6f * (hn - 0.3f);
-                    moisture = Mathf.Clamp01(moisture);
+                    moisture = FastMathf.Clamp01(moisture);
                     cover.Moisture[i] = moisture;
 
                     float n = forestNoise.Fbm(wx * 0.0032f, wz * 0.0032f, 4) + 0.2f * (moisture - 0.5f);
@@ -184,8 +211,8 @@ namespace MedievalZen.World
                         float reach = farmSites[s].Radius + FarmZone + 40f;
                         float dSqr = dx * dx + dz * dz;
                         if (dSqr >= reach * reach) continue;
-                        float d = Mathf.Sqrt(dSqr) - farmSites[s].Radius + 35f * forestNoise.Sample(wx * 0.012f + 50f, wz * 0.012f);
-                        farm = Mathf.Max(farm, 1f - Smooth(FarmZone * 0.55f, FarmZone, d));
+                        float d = FastMathf.Sqrt(dSqr) - farmSites[s].Radius + 35f * forestNoise.Sample(wx * 0.012f + 50f, wz * 0.012f);
+                        farm = FastMathf.Max(farm, 1f - Smooth(FarmZone * 0.55f, FarmZone, d));
                     }
 
                     cover.Farm[i] = farm;
@@ -211,7 +238,7 @@ namespace MedievalZen.World
         /// Fills <see cref="Scree"/> as <see cref="Build"/> does (<paramref name="amplitude"/>: the height that counts as the top
         /// of the relief).
         /// </summary>
-        public void ComputeScree(float amplitude) => ComputeScree(this, Mathf.Max(1e-3f, amplitude));
+        public void ComputeScree(float amplitude) => ComputeScree(this, FastMathf.Max(1e-3f, amplitude));
 
         /// <summary>Fills <see cref="Scree"/>: for each highland texel, the steepest slope 4-16 m straight uphill.</summary>
         private static void ComputeScree(LandCover cover, float amplitude)
@@ -224,20 +251,20 @@ namespace MedievalZen.World
                 {
                     int i = z * res + x;
                     float hn = cover.Height[i] / amplitude;
-                    float high = Mathf.Max(cover.Highland[i], Smooth(0.4f, 0.55f, hn));
+                    float high = FastMathf.Max(cover.Highland[i], Smooth(0.4f, 0.55f, hn));
                     if (high < 0.2f || cover.Slope[i] > 0.75f) continue;
                     float gx = cover.Height[i + 1] - cover.Height[i - 1];
                     float gz = cover.Height[i + res] - cover.Height[i - res];
-                    float g = Mathf.Sqrt(gx * gx + gz * gz);
+                    float g = FastMathf.Sqrt(gx * gx + gz * gz);
                     if (g < 1e-4f) continue;
                     gx /= g;
                     gz /= g;
                     float above = 0f;
                     for (float d = 4f; d <= 16f; d += 4f)
                     {
-                        int tx = Mathf.Clamp((int)((x + 0.5f) + gx * d / texel), 0, res - 1);
-                        int tz = Mathf.Clamp((int)((z + 0.5f) + gz * d / texel), 0, res - 1);
-                        above = Mathf.Max(above, cover.Slope[tz * res + tx]);
+                        int tx = FastMathf.Clamp((int)((x + 0.5f) + gx * d / texel), 0, res - 1);
+                        int tz = FastMathf.Clamp((int)((z + 0.5f) + gz * d / texel), 0, res - 1);
+                        above = FastMathf.Max(above, cover.Slope[tz * res + tx]);
                     }
 
                     cover.Scree[i] = high * Smooth(0.8f, 1.1f, above) * (1f - Smooth(0.5f, 0.75f, cover.Slope[i]));
@@ -248,8 +275,8 @@ namespace MedievalZen.World
         /// <summary>Nearest texel index for world (x, z) (clamped).</summary>
         public int Index(float x, float z)
         {
-            int tx = Mathf.Clamp((int)(x / TexelSize), 0, Resolution - 1);
-            int tz = Mathf.Clamp((int)(z / TexelSize), 0, Resolution - 1);
+            int tx = FastMathf.Clamp((int)(x / TexelSize), 0, Resolution - 1);
+            int tz = FastMathf.Clamp((int)(z / TexelSize), 0, Resolution - 1);
             return tz * Resolution + tx;
         }
 
@@ -260,12 +287,19 @@ namespace MedievalZen.World
         public CoverSample Sample(float x, float z)
         {
             int last = Resolution - 1;
-            float gx = Mathf.Clamp(x / TexelSize - 0.5f, 0f, last);
-            float gz = Mathf.Clamp(z / TexelSize - 0.5f, 0f, last);
-            int x0 = Mathf.Max(0, Mathf.Min((int)gx, last - 1));
-            int z0 = Mathf.Max(0, Mathf.Min((int)gz, last - 1));
-            int x1 = Mathf.Min(x0 + 1, last);
-            int z1 = Mathf.Min(z0 + 1, last);
+            // Mathf.Clamp / Max / Min written out (same comparisons): every pass samples the cover per texel and the calls are not inlined.
+            float gx = x / TexelSize - 0.5f, gz = z / TexelSize - 0.5f;
+            if (gx < 0f) gx = 0f;
+            else if (gx > last) gx = last;
+            if (gz < 0f) gz = 0f;
+            else if (gz > last) gz = last;
+            int x0 = (int)gx, z0 = (int)gz;
+            if (x0 > last - 1) x0 = last - 1;
+            if (x0 < 0) x0 = 0;
+            if (z0 > last - 1) z0 = last - 1;
+            if (z0 < 0) z0 = 0;
+            int x1 = x0 + 1 < last ? x0 + 1 : last;
+            int z1 = z0 + 1 < last ? z0 + 1 : last;
             float tx = gx - x0;
             float tz = gz - z0;
             int i00 = z0 * Resolution + x0, i10 = z0 * Resolution + x1, i01 = z1 * Resolution + x0, i11 = z1 * Resolution + x1;
@@ -281,6 +315,9 @@ namespace MedievalZen.World
                 moisture = Mix(Moisture),
                 shore = Mix(Shore),
                 scree = Mix(Scree),
+                mountain = Mountain != null ? Mix(Mountain) : 0f,
+                talus = Talus != null ? Mix(Talus) : 0f,
+                gully = Gully != null ? Mix(Gully) : 0f,
                 weights = new BiomeWeights(
                     a.meadow * w00 + b.meadow * w10 + c.meadow * w01 + d.meadow * w11,
                     a.forest * w00 + b.forest * w10 + c.forest * w01 + d.forest * w11,
@@ -295,11 +332,40 @@ namespace MedievalZen.World
         /// <summary>Slope (rise over run) bilinearly interpolated at world (x, z); what the splat's rock rule sees.</summary>
         public float SampleSlope(float x, float z) => Sample(x, z).slope;
 
+        /// <summary>
+        /// <c>Sample(x, z).weights.forest</c> alone: the same corners, weights and float operations in the same order (bit-identical),
+        /// without the other fields (the wood floor asks for it per texel).
+        /// </summary>
+        public float SampleForest(float x, float z)
+        {
+            int last = Resolution - 1;
+            float gx = x / TexelSize - 0.5f, gz = z / TexelSize - 0.5f;
+            if (gx < 0f) gx = 0f;
+            else if (gx > last) gx = last;
+            if (gz < 0f) gz = 0f;
+            else if (gz > last) gz = last;
+            int x0 = (int)gx, z0 = (int)gz;
+            if (x0 > last - 1) x0 = last - 1;
+            if (x0 < 0) x0 = 0;
+            if (z0 > last - 1) z0 = last - 1;
+            if (z0 < 0) z0 = 0;
+            int x1 = x0 + 1 < last ? x0 + 1 : last;
+            int z1 = z0 + 1 < last ? z0 + 1 : last;
+            float tx = gx - x0;
+            float tz = gz - z0;
+            int i00 = z0 * Resolution + x0, i10 = z0 * Resolution + x1, i01 = z1 * Resolution + x0, i11 = z1 * Resolution + x1;
+            float w00 = (1f - tx) * (1f - tz), w10 = tx * (1f - tz), w01 = (1f - tx) * tz, w11 = tx * tz;
+            return ForestWeight(i00) * w00 + ForestWeight(i10) * w10 + ForestWeight(i01) * w01 + ForestWeight(i11) * w11;
+        }
+
+        /// <summary>The forest share of <see cref="Weights"/> at texel <paramref name="i"/> (the same operations).</summary>
+        private float ForestWeight(int i) => (1f - Farm[i]) * Forest[i];
+
         /// <summary>True when texel <paramref name="i"/> is under water.</summary>
         public bool IsWater(int i) => WaterHeight > 0f && Height[i] < WaterHeight;
 
         /// <summary>Water depth at texel <paramref name="i"/> (0 on land).</summary>
-        public float Depth(int i) => WaterHeight > 0f ? Mathf.Max(0f, WaterHeight - Height[i]) : 0f;
+        public float Depth(int i) => WaterHeight > 0f ? FastMathf.Max(0f, WaterHeight - Height[i]) : 0f;
 
         /// <summary>Biome weights of texel <paramref name="i"/>.</summary>
         public BiomeWeights Weights(int i)
@@ -315,7 +381,8 @@ namespace MedievalZen.World
         /// <summary>Smoothstep of <paramref name="x"/> from <paramref name="edge0"/> (0) to <paramref name="edge1"/> (1).</summary>
         public static float Smooth(float edge0, float edge1, float x)
         {
-            float t = Mathf.Clamp01((x - edge0) / (edge1 - edge0));
+            float t = (x - edge0) / (edge1 - edge0);
+            t = t < 0f ? 0f : t > 1f ? 1f : t;   // Mathf.Clamp01, written out: hot, and the call is not inlined
             return t * t * (3f - 2f * t);
         }
     }

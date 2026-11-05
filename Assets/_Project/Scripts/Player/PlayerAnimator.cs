@@ -122,6 +122,12 @@ namespace MedievalZen.Player
         /// <summary>The driven animator (may be null when the rig has no animated character).</summary>
         public Animator Animator => animator;
 
+        /// <summary>
+        /// While true (the traveller rides, set by <see cref="HorseMount"/>) the locomotion parameters ask for standing still whatever the
+        /// motor does, so the walk cycle stops under the rider's pose. False on foot: nothing changes.
+        /// </summary>
+        public bool StandStill { get; set; }
+
         /// <summary>Extra vertical offset of the Visual in metres (+ = up), on top of the skin-width compensation.</summary>
         public float GroundOffset
         {
@@ -178,8 +184,11 @@ namespace MedievalZen.Player
             primed = false;
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("PlayerAnimator");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             ApplyGrounding();   // cheap compare; follows inspector changes of the skin width too
             float dt = Time.deltaTime;
             if (dt <= 0f || animator == null || !animator.isActiveAndEnabled || animator.runtimeAnimatorController == null) return;
@@ -188,11 +197,12 @@ namespace MedievalZen.Player
             float damp = primed ? 1f : 0f;
             primed = true;
 
-            float speed = LocomotionMath.SpeedParameter(motor.PlanarSpeed);
-            Vector2 local = LocomotionMath.VelocityParameter(motor.LocalPlanarVelocity);
+            // Astride (HorseMount): the horse carries the body, so the legs stand still for the rider's pose to bend.
+            float speed = StandStill ? 0f : LocomotionMath.SpeedParameter(motor.PlanarSpeed);
+            Vector2 local = StandStill ? Vector2.zero : LocomotionMath.VelocityParameter(motor.LocalPlanarVelocity);
             bool grounded = motor.IsGrounded;
             float yaw = motor.Yaw;
-            float yawRate = LocomotionMath.YawRate(previousYaw, yaw, dt);
+            float yawRate = StandStill ? 0f : LocomotionMath.YawRate(previousYaw, yaw, dt);
             previousYaw = yaw;
 
             // Grounded flips false only after fallDelay seconds in the air.

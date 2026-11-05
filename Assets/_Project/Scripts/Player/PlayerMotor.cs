@@ -142,6 +142,19 @@ namespace MedievalZen.Player
             Request(worldDirection, speedScale, MoveStyle.FaceMovement, turnSharpness);
         }
 
+        /// <summary>
+        /// Riding request for this frame (the traveller on a horse, manual or auto-travel): like <see cref="MoveFacing"/> but at
+        /// <paramref name="metresPerSecond"/> (the gait's speed; the walk speed and the pace do not apply) and with the horse's turn
+        /// (<paramref name="turn"/>, <see cref="RidingMath"/>). Call once per frame; the last request in a frame wins.
+        /// </summary>
+        public void MoveRiding(Vector3 worldDirection, float metresPerSecond, float turnSharpness, in RideTurn turn)
+        {
+            Request(worldDirection, Mathf.Max(0f, metresPerSecond) / Mathf.Max(0.01f, walkSpeed), MoveStyle.Riding, turnSharpness);
+            rideTurn = turn;
+        }
+
+        private RideTurn rideTurn = RideTurn.Default;
+
         private void Request(Vector3 worldDirection, float speedScale, MoveStyle style, float turnSharpness)
         {
             var planar = new Vector2(worldDirection.x, worldDirection.z);
@@ -203,8 +216,11 @@ namespace MedievalZen.Player
             if (controller == null) controller = GetComponent<CharacterController>();
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("PlayerMotor");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             float dt = Time.deltaTime;
             if (dt <= 0f || !controller.enabled) return;
 
@@ -219,6 +235,12 @@ namespace MedievalZen.Player
             {
                 float previousYaw = state.Yaw;
                 MotorMath.StepFaceMovement(ref state, requestedVelocity, requestTurnSharpness, tuning, dt);
+                if (state.Yaw != previousYaw) transform.rotation = Quaternion.Euler(0f, state.Yaw, 0f);
+            }
+            else if (requestStyle == MoveStyle.Riding)
+            {
+                float previousYaw = state.Yaw;
+                RidingMath.Step(ref state, requestedVelocity, requestTurnSharpness, rideTurn, tuning, dt);
                 if (state.Yaw != previousYaw) transform.rotation = Quaternion.Euler(0f, state.Yaw, 0f);
             }
             else

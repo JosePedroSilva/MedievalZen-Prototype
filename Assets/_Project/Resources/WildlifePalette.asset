@@ -1,0 +1,495 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a58fea3e05f36642bdc828c3c933506, type: 3}
+  m_Name: WildlifePalette
+  m_EditorClassIdentifier: MedievalZen::MedievalZen.Wildlife.WildlifePalette
+  version: 2
+  catalogSignature: cow:Cow_Brown,Cow_Black,Cow_White,Cow_Horns_Brown,;sheep:Sheep,Sheep_Wool,;goat:Goat,;pig:Pig,;horse:Horse_Brown,Horse_Grey,Horse_Black,;hen:Hen,;rooster:Rooster,;chick:Chick,;goose:Goose,;golden
+    retriever:Dog_GoldenRetriever,;great dane:Dog_GreatDane,Dog_GreatDane_Black,;cat:Cat_Orange,Cat_Black,Cat_White,;dove:Dove_Rock,;deer:Deer,;stag:Deer_Gray,;fox:Fox,;rabbit:Rabbit_Brown,Rabbit_White,;squirrel:Squirrel,;boar:Boar,;wolf:Wolf,;eagle:Eagle,;beaver:Beaver,;
+  entries:
+  - name: Cow_Brown
+    prefab: {fileID: 6673162250659682606, guid: cc4e9872600e98f41b723becd59b279c, type: 3}
+    height: 1.4821211
+    length: 2.4868622
+    footOffset: -0.0072261095
+    idleState: Idle
+    bools:
+    - isEating
+    - isWalking
+    - isDead
+    - isRunning
+    - Attack
+    - isIdle2
+    - isSleeping
+  - name: Cow_Black
+    prefab: {fileID: 3997457039564441066, guid: c97c89889a5b96649b23a5ca399a3d85, type: 3}
+    height: 1.4821211
+    length: 2.4868622
+    footOffset: -0.0072261095
+    idleState: Idle
+    bools:
+    - isEating
+    - isWalking
+    - isDead
+    - isRunning
+    - Attack
+    - isIdle2
+    - isSleeping
+  - name: Cow_White
+    prefab: {fileID: 8566778800952030619, guid: 94c652fc914ad0549b07910b7ac9e3b0, type: 3}
+    height: 1.4821211
+    length: 2.4868622
+    footOffset: -0.0072261095
+    idleState: Idle
+    bools:
+    - isEating
+    - isWalking
+    - isDead
+    - isRunning
+    - Attack
+    - isIdle2
+    - isSleeping
+  - name: Cow_Horns_Brown
+    prefab: {fileID: 1191723351749815773, guid: 95488d382b09b62468c6b4880f3ec71f, type: 3}
+    height: 1.4821211
+    length: 2.4868622
+    footOffset: -0.0072261095
+    idleState: Idle
+    bools:
+    - isEating
+    - isWalking
+    - isDead
+    - isRunning
+    - Attack
+    - isIdle2
+    - isSleeping
+  - name: Sheep
+    prefab: {fileID: 230258042689631538, guid: d5dabd480d021c24888535c7905c3491, type: 3}
+    height: 0.8646794
+    length: 1.2092754
+    footOffset: -0.026529849
+    idleState: idle
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isDead
+    - isSleeping
+    - isEating
+  - name: Sheep_Wool
+    prefab: {fileID: 7127923121774418201, guid: 10e6f8de0b6a2124e9f8aa2a4d2693b3, type: 3}
+    height: 0.8721267
+    length: 1.2076113
+    footOffset: -0.03017965
+    idleState: idle
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isDead
+    - isSleeping
+    - isEating
+  - name: Goat
+    prefab: {fileID: 3123974811983714879, guid: a5e10b054921e8c44905f95d5950fe5d, type: 3}
+    height: 0.8332852
+    length: 1.1102316
+    footOffset: -0.003167361
+    idleState: idle
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isDead
+    - isSleeping
+    - isEating
+  - name: Pig
+    prefab: {fileID: 8180171156920495958, guid: 938a7e891063b5b40a759614f170eba1, type: 3}
+    height: 0.6679885
+    length: 1.2763414
+    footOffset: -0.003881991
+    idleState: Idle
+    bools:
+    - isWalking
+    - isDead
+    - isRunning
+    - isAttacking
+    - isSleeping
+    - isEating
+  - name: Horse_Brown
+    prefab: {fileID: 3775511529805373595, guid: 8eee9eef0d5dc6b4f81506ba37cc5736, type: 3}
+    height: 1.904022
+    length: 2.3525758
+    footOffset: -0.0006904006
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isBarking
+    - isDead
+    - isAttacking
+    - isEating
+    - isSleeping
+  - name: Horse_Grey
+    prefab: {fileID: 6531452089632268242, guid: b2ac9cf608931d94381b964fd7b974b9, type: 3}
+    height: 1.904022
+    length: 2.3525758
+    footOffset: -0.0006904006
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isBarking
+    - isDead
+    - isAttacking
+    - isEating
+    - isSleeping
+  - name: Horse_Black
+    prefab: {fileID: 8257234484451057207, guid: cced894415ab9a74f8b162f43ebefdc2, type: 3}
+    height: 1.904022
+    length: 2.3525758
+    footOffset: -0.0006904006
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isBarking
+    - isDead
+    - isAttacking
+    - isEating
+    - isSleeping
+  - name: Hen
+    prefab: {fileID: 5542595147048574997, guid: 34dae44796053824491d4d1733cc96f4, type: 3}
+    height: 0.61521673
+    length: 0.43694994
+    footOffset: -0.0016732514
+    idleState: Idle
+    bools:
+    - isWalking
+    - isDead
+    - isRunning
+    - isAttacking
+    - isEating
+    - isSleeping
+    - isIdle2
+  - name: Rooster
+    prefab: {fileID: 4731868532278151926, guid: 401206e07b4451a48a7d760a8793f2e3, type: 3}
+    height: 0.6357141
+    length: 0.66102636
+    footOffset: -0.000000059604645
+    idleState: Idle
+    bools:
+    - isWalking
+    - isDead
+    - isRunning
+    - isAttacking
+    - isEating
+    - isSleeping
+    - isIdle2
+  - name: Chick
+    prefab: {fileID: 6614107769840780009, guid: 46692ef13e4124a49b9f5f52e91379de, type: 3}
+    height: 0.08766686
+    length: 0.071786
+    footOffset: -0.0006878376
+    idleState: Idle 0
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isSitting
+    - isDead
+    - isLooking
+    - isFlying
+    - isEating
+    - isSleeping
+    - isIdle2
+  - name: Goose
+    prefab: {fileID: 1372588930516042003, guid: 72adb7a0338c9ec4f90b36639ffed25b, type: 3}
+    height: 0.9002315
+    length: 0.76125777
+    footOffset: -0.0013924837
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isDead
+    - isIdle2
+    - isIdle3
+    - isIdle4
+    - isSleeping
+    - isEating
+  - name: Dog_GoldenRetriever
+    prefab: {fileID: 5426555902615102297, guid: 5e4604a3c1b95fc47bcc59248f9facd9, type: 3}
+    height: 0.76415
+    length: 1.0228316
+    footOffset: -0.012218326
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isBarking
+    - isSitting
+  - name: Dog_GreatDane
+    prefab: {fileID: 5942219878388031930, guid: 96a57842b09b2644f96e896da8f64875, type: 3}
+    height: 1.0671126
+    length: 1.1686292
+    footOffset: -0.0016305447
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isBarking
+    - isSitting
+  - name: Dog_GreatDane_Black
+    prefab: {fileID: 1164165577456335079, guid: f66e6643894582942b021477645c1162, type: 3}
+    height: 1.0671126
+    length: 1.1686292
+    footOffset: -0.0016305447
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isBarking
+    - isSitting
+  - name: Cat_Orange
+    prefab: {fileID: 379019426769918709, guid: 14c1db5351316914c853635a166937eb, type: 3}
+    height: 0.3575819
+    length: 0.6626077
+    footOffset: -0.0005991906
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isIdling
+    - isDead
+    - isSleeping
+    - isAttacking
+  - name: Cat_Black
+    prefab: {fileID: 4123810418592697643, guid: 5b07d0c9a5120b449ba061ee3b399628, type: 3}
+    height: 0.3575819
+    length: 0.6626077
+    footOffset: -0.0005991906
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isIdling
+    - isDead
+    - isSleeping
+    - isAttacking
+  - name: Cat_White
+    prefab: {fileID: 2126211486182355018, guid: 05a35a6a06cd44a49aeeb5f1764bae79, type: 3}
+    height: 0.3575819
+    length: 0.6626077
+    footOffset: -0.0005991906
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isIdling
+    - isDead
+    - isSleeping
+    - isAttacking
+  - name: Dove_Rock
+    prefab: {fileID: 5661874671404562726, guid: 41a8565651be5d243b55bbd3bff7fa98, type: 3}
+    height: 0.26540917
+    length: 0.26566866
+    footOffset: -0.0026142746
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isDead
+    - isLooking
+    - isFlying
+  - name: Deer
+    prefab: {fileID: 8138828975703056157, guid: de1303c5e4d45be448ea3c73bfd3d459, type: 3}
+    height: 2.4174562
+    length: 2.2278514
+    footOffset: -0.0020905733
+    idleState: Idle
+    bools:
+    - isWalking
+    - isDead
+    - isEating
+    - isRunning
+    - isAttacking
+  - name: Deer_Gray
+    prefab: {fileID: 7617072111032519550, guid: b596249764d6d224f9e84cb87ced627c, type: 3}
+    height: 2.4174562
+    length: 2.2278514
+    footOffset: -0.0020905733
+    idleState: Idle
+    bools:
+    - isWalking
+    - isDead
+    - isEating
+    - isRunning
+    - isAttacking
+  - name: Fox
+    prefab: {fileID: 4499957550594474793, guid: 2eac4c921bf8dd446bf5c9b47651394f, type: 3}
+    height: 0.9879588
+    length: 2.068026
+    footOffset: -0.003095895
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isSitting
+    - isAttacking
+  - name: Rabbit_Brown
+    prefab: {fileID: 8180794443243410997, guid: 5080f91d9b2b8e440b83dbfbd633001e, type: 3}
+    height: 0.27330348
+    length: 0.43121457
+    footOffset: -0.0028179884
+    idleState: Rabbit_Idle
+    bools:
+    - isJumping
+    - isLookingOut
+    - isRunning
+    - isJumping_Up
+    - isDead_0
+    - isDead_1
+  - name: Rabbit_White
+    prefab: {fileID: 6958203219639005626, guid: ba13352f064b81f479fa63b7d0270d14, type: 3}
+    height: 0.27330348
+    length: 0.43121457
+    footOffset: -0.0028179884
+    idleState: Rabbit_Idle
+    bools:
+    - isJumping
+    - isLookingOut
+    - isRunning
+    - isJumping_Up
+    - isDead_0
+    - isDead_1
+  - name: Squirrel
+    prefab: {fileID: 68239274654420667, guid: cd917fb11dae76d42953a2a177590b2c, type: 3}
+    height: 0.13444418
+    length: 0.32923192
+    footOffset: -0.0020294785
+    idleState: idle
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isDead
+  - name: Boar
+    prefab: {fileID: 2659889904638752158, guid: 8dbcf6f9c7c66824a90f0b3ecbc78bf3, type: 3}
+    height: 0.7529273
+    length: 1.214901
+    footOffset: -0.0019212961
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isSitting
+    - isDead
+    - isLooking
+  - name: Wolf
+    prefab: {fileID: 743103098748469556, guid: ac83836685684304c982adec0c58cf30, type: 3}
+    height: 0.8949883
+    length: 1.6102552
+    footOffset: -0.005751878
+    idleState: Idle
+    bools:
+    - isHowling
+    - isAttacking
+    - isDead
+    - isRunning
+    - isWalking
+  - name: Eagle
+    prefab: {fileID: 1078100414069389455, guid: 04299d2492728c449bf682c69e929c78, type: 3}
+    height: 0.89442384
+    length: 1.0647881
+    footOffset: -0.18425947
+    idleState: Idle
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isSitting
+    - isDead
+    - isLooking
+    - isFlying
+  - name: Beaver
+    prefab: {fileID: 395329577032250607, guid: ebad01ffe70d80346ba9dd65c7acc091, type: 3}
+    height: 0.36225736
+    length: 0.9909353
+    footOffset: -0.007962793
+    idleState: idle
+    bools:
+    - isWalking
+    - isRunning
+    - isAttacking
+    - isDead
+  tuning:
+  - species: 0
+    scale: 1
+  - species: 1
+    scale: 1
+  - species: 2
+    scale: 1
+  - species: 3
+    scale: 1
+  - species: 4
+    scale: 1
+  - species: 5
+    scale: 1
+  - species: 6
+    scale: 1
+  - species: 7
+    scale: 1
+  - species: 8
+    scale: 1
+  - species: 9
+    scale: 1
+  - species: 10
+    scale: 1
+  - species: 11
+    scale: 1
+  - species: 12
+    scale: 1
+  - species: 13
+    scale: 1
+  - species: 14
+    scale: 1
+  - species: 15
+    scale: 1
+  - species: 16
+    scale: 1
+  - species: 17
+    scale: 1
+  - species: 18
+    scale: 1
+  - species: 19
+    scale: 1
+  - species: 20
+    scale: 1
+  - species: 21
+    scale: 1
+  clips:
+  - {fileID: 8300000, guid: c244c3141607649918f54beb8a706957, type: 3}
+  - {fileID: 8300000, guid: 7a8ecf224348340ea938d9a55928756b, type: 3}
+  - {fileID: 8300000, guid: 39081a8f8fcfc43319c8f687e415712a, type: 3}
+  - {fileID: 8300000, guid: cc6dadbb62bf240f9b731c085a12f51c, type: 3}
+  - {fileID: 8300000, guid: 9968f065c9f3d4aebadb78a35d7cfd94, type: 3}
+  - {fileID: 8300000, guid: 64f2394e24967461c83b283349e00581, type: 3}
+  - {fileID: 8300000, guid: 23a85d7a4180c4a4384a9f9da0c18caa, type: 3}
+  - {fileID: 8300000, guid: 695628755669c46ecac58b609405526c, type: 3}
+  - {fileID: 8300000, guid: 7b6b33682babad5438d7b5414f5bcc87, type: 3}
+  - {fileID: 8300000, guid: 9f5591bf0410147a3ab3dd80de160b1b, type: 3}
+  - {fileID: 8300000, guid: e4aa6f48a36014dcc9d111bf13e6c85f, type: 3}
+  - {fileID: 8300000, guid: 1a9e4068c7b4b42afbfb409a5a13bd52, type: 3}
+  - {fileID: 8300000, guid: 1e5b44e7729e64f8594f629e9e51c5c1, type: 3}

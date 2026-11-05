@@ -175,6 +175,21 @@ namespace MedievalZen.World
             return Heads[head] + PlaceMiddles[k % PlaceMiddles.Length] + Tails[k / PlaceMiddles.Length];
         }
 
+        private static readonly string[] CityHeads =
+        {
+            "Kings", "Queens", "Win", "Glou", "Dor", "Lan", "Ald", "Bel", "Carl", "Ex", "Lin", "Roch", "Wor", "Salis", "Cant", "Ely",
+            "Mar", "Stam", "Here", "Leo", "Durn", "Wester", "Aber", "Sever",
+        };
+
+        private static readonly string[] CityTails = { "chester", "caster", "bury", "minster", "borough", "cester", "bridge", "wick" };
+
+        /// <summary>The name of the walled city in farmland region <paramref name="index"/> of a world, e.g. "Kingsminster" (its own kind of name).</summary>
+        public static string CityAt(int seed, long index)
+        {
+            int k = Permute(seed, 9, index, CityHeads.Length * CityTails.Length);
+            return CityHeads[k % CityHeads.Length] + CityTails[k / CityHeads.Length];
+        }
+
         /// <summary>The <paramref name="index"/>-th pass name of a world, e.g. "Crow Gap".</summary>
         public static string PassAt(int seed, long index)
         {
@@ -201,6 +216,30 @@ namespace MedievalZen.World
         {
             int k = Permute(seed, 7, index, PeakTails.Length * Heads.Length);
             return Heads[k / PeakTails.Length] + PeakTails[k % PeakTails.Length];
+        }
+
+        private static readonly string[][] LandmarkForms =
+        {
+            new[] { "{0} Tower", "{0} Watch", "Old {0} Tower", "{0} Keep" },             // tower
+            new[] { "{0} Chapel", "{0} Kirk", "St {0}'s", "Chapel of {0}" },            // chapel
+            new[] { "{0} Mill", "{0} Windmill", "{0} Mill", "Old {0} Mill" },            // windmill
+            new[] { "The {0} Stones", "{0} Ring", "The {0} Circle", "{0} Henge" },        // standing stones
+            new[] { "{0} Abbey", "Old {0} Hall", "{0} Ruins", "{0} Priory" },            // ruin
+        };
+
+        private static readonly string[] SaintHeads = { "Aldo", "Bride", "Cuth", "Eda", "Hilda", "Oswin", "Wilfred", "Ninian", "Chad", "Botolph", "Aidan", "Ebba" };
+
+        /// <summary>
+        /// The <paramref name="index"/>-th landmark name of a world for landmark kind <paramref name="kind"/> (0 tower, 1 chapel,
+        /// 2 windmill, 3 standing stones, 4 ruin), e.g. "Wex Tower", "St Cuth's", "The Hart Stones".
+        /// </summary>
+        public static string LandmarkAt(int seed, long index, int kind)
+        {
+            string[] forms = LandmarkForms[((kind % LandmarkForms.Length) + LandmarkForms.Length) % LandmarkForms.Length];
+            int k = Permute(seed, 8 + kind, index, forms.Length * Heads.Length);
+            string form = forms[k % forms.Length];
+            string head = form.StartsWith("St ", System.StringComparison.Ordinal) ? SaintHeads[(k / forms.Length) % SaintHeads.Length] : Heads[k / forms.Length];
+            return string.Format(form, head);
         }
 
         /// <summary>Seeded bijection of Z/n applied to <paramref name="index"/> (an affine map with a multiplier coprime to n).</summary>

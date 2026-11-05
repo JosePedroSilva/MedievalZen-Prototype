@@ -62,8 +62,11 @@ namespace MedievalZen.Travel
             SetFocus(null);
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("PlayerInteractor");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             bool blocked = Busy || (controller != null && controller.InputOverride != null) || (seat != null && seat.IsActive);
             SetFocus(blocked ? null : FindBest());
         }
@@ -110,7 +113,14 @@ namespace MedievalZen.Travel
 
         private void OnInteract()
         {
-            if (Busy || focus == null) return;
+            if (Busy) return;
+            if (focus == null)
+            {
+                // Nothing in reach: on horseback the key gets down (at a walk or standing).
+                if (HorseMount.Current != null && HorseMount.Current.gameObject == gameObject) HorseMount.Current.TryDismount();
+                return;
+            }
+
             Interactable target = focus;
             SetFocus(null);
             target.Interact(this);

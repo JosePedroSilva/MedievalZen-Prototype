@@ -317,10 +317,22 @@ namespace MedievalZen.World
 
                             if (rock)
                             {
-                                float size = sizeMin + (sizeMax - sizeMin) * Mathf.Pow((float)rng.NextDouble(), Mathf.Max(0.1f, rule.sizeBias));
+                                // A window may swap the family here (the endless road's pass ranges: their own rock look), sized by its spec.
+                                string family = rule.family;
+                                float lo = sizeMin, hi = sizeMax;
+                                string swapped = window?.RockFamily?.Invoke(rule.family, x, z);
+                                if (swapped != null && swapped != family && keys.Has(swapped) && keys.HasMetrics(swapped))
+                                {
+                                    family = swapped;
+                                    RockSpec swappedSpec = RockPlacer.SpecFor(family);
+                                    lo = swappedSpec.heightMin;
+                                    hi = swappedSpec.heightMax;
+                                }
+
+                                float size = lo + (hi - lo) * Mathf.Pow((float)rng.NextDouble(), Mathf.Max(0.1f, rule.sizeBias));
                                 float jitter = (float)(rng.NextDouble() - 0.5) * 24f;
-                                int rockVariant = keys.PickVariant(rule.family, rng);
-                                if (!RockPlacer.TryPlace(rocks, rule.family, rockVariant, x, z, size, yaw, jitter, out PropPlacement seated, out float radius)) continue;
+                                int rockVariant = keys.PickVariant(family, rng);
+                                if (!RockPlacer.TryPlace(rocks, family, rockVariant, x, z, size, yaw, jitter, out PropPlacement seated, out float radius)) continue;
                                 float keepRadius = Mathf.Max(rule.footprint, 0.8f * radius);
                                 if (keepRadius > rule.footprint && occupancy.Overlaps(x, z, keepRadius)) continue;
                                 occupancy.Add(new Vector3(x, 0f, z), keepRadius);

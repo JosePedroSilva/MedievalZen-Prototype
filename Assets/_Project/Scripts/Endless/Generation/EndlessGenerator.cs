@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using MedievalZen.World;
 
 namespace MedievalZen.Endless.Generation
@@ -19,6 +20,40 @@ namespace MedievalZen.Endless.Generation
         private readonly System.Collections.Concurrent.ConcurrentDictionary<long, Waypoint[]> regionWaypoints =
             new System.Collections.Concurrent.ConcurrentDictionary<long, Waypoint[]>();
         private readonly Func<long, Waypoint[]> buildRegionWaypoints;
+        private int regionWaypointBuilds;
+
+        /// <summary>
+        /// How many regions have had their waypoints built so far (the lazy work behind <see cref="Waypoints"/>: places, features,
+        /// landmarks and their best view, stream crossings, milestones; 20–150 ms per region cold in .NET, 3–4 times that in the
+        /// editor). A main-thread caller that wants no lazy work checks <see cref="WaypointsCached"/> first.
+        /// </summary>
+        public int RegionWaypointBuilds => Volatile.Read(ref regionWaypointBuilds);
+
+        /// <summary>True when every region overlapping [<paramref name="sFrom"/>, <paramref name="sTo"/>] has its waypoints cached, so
+        /// <see cref="Waypoints"/> over that range does no lazy work (only the region sequence is read).</summary>
+        public bool WaypointsCached(double sFrom, double sTo)
+        {
+            Region r = Regions.At(sFrom);
+            while (r.Start <= sTo)
+            {
+                if (!regionWaypoints.ContainsKey(r.Index)) return false;
+                r = Regions.Get(r.Index + 1);
+            }
+
+            return true;
+        }
+
+        /// <summary>Builds the waypoints of every region overlapping [<paramref name="sFrom"/>, <paramref name="sTo"/>] (for a worker
+        /// thread, ahead of the traveller). Each region's list depends only on the seed and the region, never on query order.</summary>
+        public void WarmWaypoints(double sFrom, double sTo)
+        {
+            Region r = Regions.At(sFrom);
+            while (r.Start <= sTo)
+            {
+                regionWaypoints.GetOrAdd(r.Index, buildRegionWaypoints);
+                r = Regions.Get(r.Index + 1);
+            }
+        }
 
         /// <summary>
         /// Optional diagnostics: called with (stage, milliseconds) for every stage of every tile (heights, cover, dressings,
@@ -37,9 +72,14 @@ namespace MedievalZen.Endless.Generation
             Plan = new JourneyPlan(p, Regions, Curve);
             Profile = new ElevationProfile(p, Regions, Plan);
             Terrain = new TerrainField(p, Curve, Regions, Plan, Profile);
+            Streams = new StreamNetwork(p, Curve, Regions, Plan, Profile, Terrain);
+            Profile.SetStreams(Streams);
+            Terrain.SetStreams(Streams);
             Features = new FeaturePlan(p, Curve, Regions, Plan, Profile, Terrain);
             Dressings = new DressingCache(p, Keys, Curve, Profile, Terrain);
-            Fields = new FieldMosaic(p, Curve, Regions, Plan, Terrain);
+            Fields = new FieldMosaic(p, Curve, Regions, Plan, Terrain, Dressings);
+            Landmarks = new LandmarkPlan(p, Curve, Regions, Plan, Profile, Terrain, Fields, Features, Keys);
+            Boundaries = new FieldBoundaries(p, Keys, Curve, Regions, Terrain, Fields);
             buildRegionWaypoints = BuildRegionWaypoints;
             tiles = new TileGenerator(p, Keys, Curve, Regions, Plan, Profile, Terrain, Features, Dressings, Fields, this);
         }
@@ -65,6 +105,9 @@ namespace MedievalZen.Endless.Generation
         /// <summary>The global terrain function.</summary>
         public TerrainField Terrain { get; }
 
+        /// <summary>The streams and their road crossings (fords and bridges).</summary>
+        public StreamNetwork Streams { get; }
+
         /// <summary>Viewpoints, camps and cols.</summary>
         public FeaturePlan Features { get; }
 
@@ -73,6 +116,12 @@ namespace MedievalZen.Endless.Generation
 
         /// <summary>The farmland patchwork.</summary>
         public FieldMosaic Fields { get; }
+
+        /// <summary>The landmarks seen from the road (towers, chapels, windmills, standing stones, ruins).</summary>
+        public LandmarkPlan Landmarks { get; }
+
+        /// <summary>The walls, hedges and fences round the farmland fields.</summary>
+        public FieldBoundaries Boundaries { get; }
 
         /// <inheritdoc />
         public RoadPoint Road(double s)
@@ -132,6 +181,7 @@ namespace MedievalZen.Endless.Generation
         /// <summary>Every waypoint whose road distance lies in region <paramref name="index"/>, sorted.</summary>
         private Waypoint[] BuildRegionWaypoints(long index)
         {
+            Interlocked.Increment(ref regionWaypointBuilds);
             Region region = Regions.Get(index);
             double sFrom = region.Start, sTo = region.End;
             var list = new List<Waypoint>();
@@ -172,7 +222,32 @@ namespace MedievalZen.Endless.Generation
                 });
             }
 
-            // Milestones every 500 m (none inside a settlement), on the right of the road.
+            // Landmarks off the road, at the road distance they were planned from.
+            foreach (LandmarkSite l in Landmarks.Of(index))
+            {
+                if (l.S < sFrom || l.S >= sTo) continue;
+                list.Add(new Waypoint
+                {
+                    Id = l.Id, Kind = WaypointKind.Landmark, Name = l.Name, S = l.S, X = l.X, Z = l.Z, Height = l.Ground, Radius = l.Radius,
+                    RoadHeadingDeg = Heading(l.S), ViewS = Landmarks.BestView(l), StructureHeight = l.Height,
+                });
+            }
+
+            // Fords and bridges where streams cross the road.
+            var crossings = new List<Crossing>();
+            Streams.Crossings(sFrom, sTo, crossings);
+            foreach (Crossing c in crossings)
+            {
+                if (c.S < sFrom || c.S >= sTo) continue;
+                RoadPoint at = Road(c.S);
+                list.Add(new Waypoint
+                {
+                    Id = c.Id, Kind = c.Kind == CrossingKind.Bridge ? WaypointKind.Bridge : WaypointKind.Ford, Name = c.Name, S = c.S, X = at.X, Z = at.Z,
+                    Height = at.Height, Radius = 6f, RoadHeadingDeg = at.HeadingDeg,
+                });
+            }
+
+            // Milestones every 500 m (none inside a settlement or at a crossing), on the right of the road.
             var near = new List<Place>();
             Plan.Inns(sFrom - 200.0, sTo + 200.0, near);
             Plan.RegionPlaces(sFrom - 200.0, sTo + 200.0, near);
@@ -185,6 +260,9 @@ namespace MedievalZen.Endless.Generation
                 {
                     if (place.IsSettlement && Math.Abs(place.S - s) < place.Radius + 20.0) inside = true;
                 }
+
+                Crossing ford = Streams.Plan.Cell(StreamPlan.CellOf(s));
+                if (ford != null && Math.Abs(ford.S - s) < 45.0 && Streams.Accepted(ford)) inside = true;
 
                 if (inside) continue;
                 RoadPoint at = Road(s);
@@ -208,7 +286,7 @@ namespace MedievalZen.Endless.Generation
             return new Waypoint
             {
                 Id = place.Id,
-                Kind = (WaypointKind)(int)place.Kind,
+                Kind = place.City ? WaypointKind.City : (WaypointKind)(int)place.Kind,
                 Name = place.Name,
                 S = place.S,
                 X = at.X,

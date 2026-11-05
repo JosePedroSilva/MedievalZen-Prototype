@@ -26,9 +26,10 @@ namespace MedievalZen.Environment
     /// Slow, seeded weather (clear, hazy, misty, overcast, light rain) from a <see cref="WeatherModel"/> keyed on
     /// <c>WorldSettings.seed</c> and the <see cref="DayCycle"/> day and hour. Every frame it publishes the blended
     /// <see cref="Current"/> preset and drives: the DayCycle sun/cloud/overcast hooks, the Synty vegetation wind globals
-    /// (<c>_WindDirection</c>, <c>_WindIntensity</c>, <c>_GaleStrength</c> — also written into the scene's Synty
-    /// <c>WeatherControl</c> so its own Update agrees), and the rain particle emission. The AtmosphereController reads
-    /// <see cref="Current"/> for the fog. Force a state with <see cref="forcedState"/> or the context menu.
+    /// (<c>_WindIntensity</c> from the weather's wind and the gusts, constant <c>_GaleStrength</c> and <c>_WindDirection</c>,
+    /// see <see cref="FoliageWind"/>; also written into a scene's Synty <c>WeatherControl</c> so its own Update agrees), and
+    /// the rain particle emission. The AtmosphereController reads <see cref="Current"/> for the fog. Force a state with
+    /// <see cref="forcedState"/> or the context menu.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-58)]
@@ -188,14 +189,30 @@ namespace MedievalZen.Environment
             if (Current == this) Current = null;
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("WeatherSystem");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (model == null) return;
             DayCycle cycle = DayCycle.Current;
             int day = cycle != null ? cycle.Day : 1;
             float hour = cycle != null ? cycle.Hour : 12f;
             float hoursPerSecond = cycle != null ? cycle.Clock.HoursPerRealSecond : 1f / 60f;
             float crossFadeHours = crossFadeSeconds * hoursPerSecond;
+
+            // A new season choice gives a new schedule (the seasons weight the draws); fade to it like a released override.
+            if (model.Season != Season.Choice)
+            {
+                model.Season = Season.Choice;
+                if (initialised && !forcing)
+                {
+                    releasing = true;
+                    releaseFrom = Weather;
+                    releaseWeight = 0f;
+                    BeginTransition();
+                }
+            }
 
             WeatherPreset scheduled = model.Evaluate(WeatherModel.AbsoluteHours(day, hour), crossFadeHours,
                 out WeatherState from, out WeatherState to, out float blend);
@@ -282,21 +299,48 @@ namespace MedievalZen.Environment
             float wander = (Mathf.PerlinNoise(Time.time * 0.004f, 3.1f) * 2f - 1f) * windWander;
             Vector3 direction = Quaternion.Euler(0f, wander, 0f) * baseWindDirection;
             WindDirection = direction;
-            float gustNoise = Mathf.PerlinNoise(Time.time * 0.05f, 7.7f);
-            float wind = Mathf.Clamp01(weather.wind * (0.85f + 0.3f * gustNoise));
-            float gale = Mathf.Clamp01(weather.gust);
-            Shader.SetGlobalVector(WindDirectionId, direction);
-            Shader.SetGlobalFloat(WindIntensityId, wind);
-            Shader.SetGlobalFloat(GaleStrengthId, gale);
+            Gust = FoliageWind.GustFromNoise(Mathf.PerlinNoise(Time.time * GustSpeed, 0.37f));
+            FoliageIntensity = FoliageWind.Intensity(weather.wind, Gust);
+
+            // The foliage (sward detail materials and the endless road's tree copies, which read these globals) sways with
+            // the weather's wind and the gusts through the intensity only; gale and direction stay fixed, because the
+            // shader's sway speed depends on them times the time since scene start (see FoliageWind).
+            Shader.SetGlobalVector(WindDirectionId, baseWindDirection);
+            Shader.SetGlobalFloat(WindIntensityId, FoliageIntensity);
+            Shader.SetGlobalFloat(GaleStrengthId, FoliageWind.Gale);
 
             // The Synty WeatherControl pushes its own fields every Update (after us); keep them in step, twice a second
             // (reflection boxes the float, so not every frame).
             if (syntyWeather == null || Time.unscaledTime < syntyPushTime) return;
             syntyPushTime = Time.unscaledTime + 0.5f;
-            syntyWind?.SetValue(syntyWeather, wind);
-            syntyGale?.SetValue(syntyWeather, gale);
-            syntyWeather.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+            syntyWind?.SetValue(syntyWeather, FoliageIntensity);
+            syntyGale?.SetValue(syntyWeather, FoliageWind.Gale);
+            syntyWeather.transform.rotation = Quaternion.LookRotation(baseWindDirection, Vector3.up);
         }
+
+        /// <summary>Speed of the gust envelope (the wind sound's default, so gusts are heard and seen together).</summary>
+        private const float GustSpeed = 0.045f;
+
+        /// <summary>0..1 gust envelope this frame (lulls long, gusts short); the foliage and the wind sound both follow it.</summary>
+        public float Gust { get; private set; }
+
+        /// <summary>The foliage wind intensity pushed this frame (<see cref="FoliageWind.Intensity"/>).</summary>
+        public float FoliageIntensity { get; private set; } = FoliageWind.BuiltInIntensity;
+
+        /// <summary>
+        /// Safe wind globals before any weather runs (the shader normalises the direction: zero would give NaN vertices on the
+        /// materials that read the globals). The same values the shader uses on its own, so nothing changes until the weather
+        /// takes over. Also called by the editor on load.
+        /// </summary>
+        public static void PushDefaultWindGlobals()
+        {
+            Shader.SetGlobalVector(WindDirectionId, Quaternion.Euler(0f, 40f, 0f) * Vector3.forward);
+            Shader.SetGlobalFloat(WindIntensityId, FoliageWind.BuiltInIntensity);
+            Shader.SetGlobalFloat(GaleStrengthId, FoliageWind.Gale);
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void DefaultWindGlobalsAtStart() => PushDefaultWindGlobals();
 
         private void ApplyRain(float rain)
         {
@@ -383,7 +427,7 @@ namespace MedievalZen.Environment
         private void LogSchedule()
         {
             WorldSettings settings = GameWorld.Current != null ? GameWorld.Current.Settings : FindFirstObjectByType<GameWorld>()?.Settings;
-            var preview = new WeatherModel((settings != null ? settings.seed : 1) + seedOffset, presets, slotHours, stayProbability);
+            var preview = new WeatherModel((settings != null ? settings.seed : 1) + seedOffset, presets, slotHours, stayProbability) { Season = Season.Choice };
             var log = new System.Text.StringBuilder("Weather schedule:");
             int slots = Mathf.CeilToInt(72f / preview.SlotHours);
             for (int i = 0; i < slots; i++)

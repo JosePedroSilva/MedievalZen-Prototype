@@ -39,6 +39,13 @@ namespace MedievalZen.World
         /// </summary>
         public double keepMinX, keepMinZ, keepMaxX, keepMaxZ;
 
+        /// <summary>
+        /// Optional (null: none): the rock family the scatter places instead of a rule's own at window-local (x, z), or null to keep
+        /// it. The endless road's pass ranges swap the Meadow rocks for their grey rock families. A function of position only, so
+        /// every window agrees.
+        /// </summary>
+        public Func<string, float, float, string> RockFamily;
+
         /// <summary>Creates a window whose local (0, 0) is the absolute (<paramref name="x"/>, <paramref name="z"/>).</summary>
         public TileWindow(double x, double z)
         {

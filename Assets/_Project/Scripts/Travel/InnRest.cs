@@ -32,6 +32,9 @@ namespace MedievalZen.Travel
         [SerializeField, Min(0.05f), Tooltip("Seconds of the fade back in.")]
         private float fadeInSeconds = 1.4f;
 
+        /// <summary>Raised with the inn's name once a night's rest has moved the clock to the waking hour (the traveller's journal).</summary>
+        public static event System.Action<string> Rested;
+
         /// <summary>Id of the inn in <see cref="Roads.RoadNetwork.Settlements"/>.</summary>
         public int SettlementId => settlementId;
 
@@ -51,6 +54,8 @@ namespace MedievalZen.Travel
         /// <inheritdoc />
         public override bool TryFocus(Vector3 playerPosition, Vector3 viewForward, out float score)
         {
+            score = float.PositiveInfinity;
+            if (HorseMount.TravellerMounted) return false;   // on horseback: get down first (Interact then dismounts)
             return InReach(playerPosition, viewForward, transform.position, reach, -0.2f, out score);
         }
 
@@ -81,6 +86,7 @@ namespace MedievalZen.Travel
             }
 
             if (DayCycle.Current != null) DayCycle.Current.SetTime(wakeHour);
+            Rested?.Invoke(innName);   // the journal writes the night
             if (hud != null) hud.ShowToast("You rest until dawn");
             yield return new WaitForSeconds(holdSeconds);
             if (hud != null) yield return hud.Fade(0f, fadeInSeconds);

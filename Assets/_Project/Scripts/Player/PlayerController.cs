@@ -13,6 +13,8 @@ namespace MedievalZen.Player
     /// <see cref="PlayerSeat"/> and <see cref="MedievalZen.Cinematic.CinematicDirector"/>, which are added at runtime when the
     /// rig has none. While the seat holds the body (walking to a seat, seated, getting up) this controller does not drive the
     /// motor; Move input, the sit key, Interact or auto-travel stand the traveller up instead.
+    /// The walking pace (<see cref="Pace"/>, <see cref="WalkPace"/>) scales the walk it asks of the motor and is handed to the
+    /// <see cref="AutoTraveller"/>; the mouse wheel and the gamepad bumpers step it.
     /// </summary>
     [RequireComponent(typeof(PlayerMotor))]
     [DisallowMultipleComponent]
@@ -58,6 +60,31 @@ namespace MedievalZen.Player
         private InputAction cinematicAction;
         private PlayerSeat seat;
         private MedievalZen.Cinematic.CinematicDirector director;
+        private AutoTraveller traveller;
+        private HorseMount mount;
+        private float pace = WalkPace.Default;
+        private readonly WalkPaceWheel paceWheel = new WalkPaceWheel();
+
+        /// <summary>
+        /// Walking pace (<see cref="WalkPace"/>: 0.5..1.5 in steps of 0.1, 1 = the validated speeds). Scales manual walking and
+        /// auto-travel (not sprint). Setting it is silent (the Journey menu, loading the settings); the wheel and the bumpers
+        /// change it through <see cref="PaceChanged"/>.
+        /// </summary>
+        public float Pace
+        {
+            get => pace;
+            set
+            {
+                pace = WalkPace.Clamp(value);
+                if (traveller != null) traveller.Pace = pace;
+            }
+        }
+
+        /// <summary>
+        /// Raised when the player steps the pace (mouse wheel, gamepad bumpers). Arguments: the new pace and the speed it gives
+        /// now in m/s (auto-travel's average speed while travelling, else the walking speed).
+        /// </summary>
+        public event Action<float, float> PaceChanged;
 
         /// <summary>Raised when the Map action is performed (Phase 3 opens the map UI).</summary>
         public event Action MapRequested;
@@ -95,6 +122,8 @@ namespace MedievalZen.Player
             motor = GetComponent<PlayerMotor>();
             if (cameraRig == null) cameraRig = GetComponent<PlayerCameraRig>();
             if (travel == null) travel = GetComponent<PlayerTravel>();
+            traveller = GetComponent<AutoTraveller>();
+            if (traveller != null) traveller.Pace = pace;
 
             if (actions == null)
             {
@@ -122,6 +151,9 @@ namespace MedievalZen.Player
             if (GetComponent<SeatedPose>() == null) gameObject.AddComponent<SeatedPose>();
             director = GetComponent<MedievalZen.Cinematic.CinematicDirector>();
             if (director == null) director = gameObject.AddComponent<MedievalZen.Cinematic.CinematicDirector>();
+            // Riding (HorseMount, its stable of inn horses, the rider's pose): also zero setup.
+            mount = GetComponent<HorseMount>();
+            if (mount == null) mount = gameObject.AddComponent<HorseMount>();
         }
 
         private void OnEnable()
@@ -152,8 +184,11 @@ namespace MedievalZen.Player
             LookInput = Vector2.zero;
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("PlayerController");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             bool lookActive = cameraRig != null && cameraRig.CursorLocked;
             LookInput = Vector2.zero;
             if (lookActive)
@@ -165,6 +200,8 @@ namespace MedievalZen.Player
                 LookIsPointer = isPointer;
                 if (InputOverride == null || !InputOverride.OnLook(look, isPointer)) cameraRig.AddLook(look, isPointer);
             }
+
+            UpdatePace();
 
             Vector2 move = moveAction.ReadValue<Vector2>();
             MoveInput = move;
@@ -178,6 +215,8 @@ namespace MedievalZen.Player
                 if (InputOverride == null && magnitude > cancelTravelThreshold) seat.StandUp(PlayerSeat.StandReason.Moved);
                 if (seat.HoldsBody) return;
             }
+
+            if (mount != null && mount.HoldsBody) return;   // getting on or off the horse: the mount slides the body
 
             if (travel != null && travel.IsTravelling)
             {
@@ -198,10 +237,19 @@ namespace MedievalZen.Player
             Vector3 right = cameraRig != null ? cameraRig.PlanarRight : transform.right;
             Vector3 direction = forward * move.y + right * move.x;
 
-            float scale = sprintAction.IsPressed() ? motor.SprintScale : 1f;
+            // The pace scales the walk only: sprint stays the fixed fast speed (walk speed x sprint scale).
+            float scale = WalkPace.ManualScale(pace, sprintAction.IsPressed(), motor.SprintScale);
             if (InputOverride != null) scale *= InputOverride.MoveSpeedScale;
 
-            if (cameraRig != null && cameraRig.Mode == CameraMode.FirstPerson)
+            if (mount != null && mount.Riding)
+            {
+                // On horseback, both views: the horse turns towards the input (camera-relative) at its gait's turn and goes where it
+                // faces; the gait sets the speed, the sprint key asks for a canter while held.
+                float ride = HorseGaits.ManualSpeed(mount.Gait, sprintAction.IsPressed());
+                if (InputOverride != null) ride *= InputOverride.MoveSpeedScale;
+                motor.MoveRiding(direction, ride, thirdPersonTurnSpeed, mount.Turn);
+            }
+            else if (cameraRig != null && cameraRig.Mode == CameraMode.FirstPerson)
             {
                 // First person: the body follows the camera, the feet may strafe or back up.
                 motor.Move(direction, scale);
@@ -214,6 +262,38 @@ namespace MedievalZen.Player
             }
         }
 
+        /// <summary>
+        /// Mouse wheel (up = faster) and gamepad bumpers (RB faster, LB slower) step the walking pace, read straight from the
+        /// devices as the debug keys are (the actions asset stays untouched; the Player map binds neither). Ignored while an
+        /// overlay holds the input (the held map rolls its scroll with the same wheel and bumpers, the Journey menu turns its
+        /// pages with the bumpers) and while the seat holds or keeps the traveller (nothing to pace there).
+        /// </summary>
+        private void UpdatePace()
+        {
+            int steps = 0;
+            Mouse mouse = Mouse.current;
+            steps += paceWheel.Update(mouse != null ? mouse.scroll.ReadValue().y : 0f, Time.unscaledDeltaTime);
+            Gamepad pad = Gamepad.current;
+            if (pad != null)
+            {
+                if (pad.rightShoulder.wasPressedThisFrame) steps++;
+                if (pad.leftShoulder.wasPressedThisFrame) steps--;
+            }
+
+            if (steps == 0 || InputOverride != null || (seat != null && seat.IsActive)) return;
+            if (mount != null && mount.Mounted)
+            {
+                // On horseback the wheel steps the gait (walk, trot, canter) instead of the walking pace.
+                if (mount.Riding) mount.StepGait(steps);
+                return;
+            }
+
+            Pace = WalkPace.Stepped(pace, steps);   // at either end it stays, and the message still shows where it stands
+            bool travelling = travel != null && travel.IsTravelling && traveller != null;
+            float speed = (travelling ? traveller.TravelSpeed : motor.WalkSpeed) * pace;
+            PaceChanged?.Invoke(pace, speed);
+        }
+
         private void OnToggleCamera(InputAction.CallbackContext context)
         {
             if (cameraRig != null) cameraRig.Toggle();
@@ -222,6 +302,12 @@ namespace MedievalZen.Player
         private void OnSit(InputAction.CallbackContext context)
         {
             if (InputOverride != null || seat == null) return;
+            if (mount != null && mount.Mounted)
+            {
+                mount.Notice("Get down from the horse first");
+                return;
+            }
+
             seat.ToggleSit();
         }
 

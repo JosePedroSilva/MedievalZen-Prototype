@@ -27,7 +27,7 @@ namespace MedievalZen.Travel
         public override bool TryFocus(Vector3 playerPosition, Vector3 viewForward, out float score)
         {
             score = float.PositiveInfinity;
-            if (seat == null || seat.IsActive) return false;
+            if (seat == null || seat.IsActive || HorseMount.TravellerMounted) return false;   // on horseback: get down first
             if (Time.unscaledTime >= nextRefresh)
             {
                 nextRefresh = Time.unscaledTime + RefreshSeconds;

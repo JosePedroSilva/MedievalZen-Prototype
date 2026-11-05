@@ -1,0 +1,838 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ce234cf37c95c945ad3a020e05ab36d, type: 3}
+  m_Name: MusicLibrary
+  m_EditorClassIdentifier: MedievalZen::MedievalZen.Sound.MusicLibrary
+  version: 1
+  tracks:
+  - title: Cloud Cathedral
+    folder: Ethereal Music Pack/Ethereal Music Pack/Cloud Cathedral (RT 5.625)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 47358ee2b6c196145aef80a0b069cedb, type: 3}
+    intensity2: {fileID: 8300000, guid: e1117391f0a682f43842caf0aab4d90f, type: 3}
+    main: {fileID: 8300000, guid: 0958c19797a2214409684106c327c644, type: 3}
+    cut30: {fileID: 8300000, guid: 2bb6f76e6630dba4a931ae4eb4bcebdb, type: 3}
+    cut60: {fileID: 8300000, guid: 6f09b6b74de82a64c9af3c8b7985378e, type: 3}
+    tail: 5.625
+    duration: 95.625
+    loop: 90
+    cut30Seconds: 35.63
+    cut60Seconds: 65.63
+    mainRmsDb: -17.2
+    intensity1RmsDb: -21.1
+    intensity2RmsDb: -18.1
+    tailDropDb: NaN
+    brightnessHz: 554
+    pulse: 1.2
+    onsets: 0.48
+    trimDb: -5.799999
+    mood:
+    - 0.7095741
+    - 0.42997253
+    - 0.24159999
+    - 0.37498334
+  - title: Enigmatic Badger
+    folder: Ethereal Music Pack/Ethereal Music Pack/Enigmatic Badger (RT 7.2)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 5d4042d20cdd5924b82ec4ec78518034, type: 3}
+    intensity2: {fileID: 8300000, guid: fc72346c497ea194da8764d195420744, type: 3}
+    main: {fileID: 8300000, guid: 5179fcdbcd7dd874d85ffb82b7483a93, type: 3}
+    cut30: {fileID: 8300000, guid: 098c33ed5bd75f3439ac57f99ca281d4, type: 3}
+    cut60: {fileID: 8300000, guid: 8ec345f8867271b4382b3bcb7ae5bd4d, type: 3}
+    tail: 7.2
+    duration: 93.6
+    loop: 86.4
+    cut30Seconds: 36
+    cut60Seconds: 64.8
+    mainRmsDb: -14.1
+    intensity1RmsDb: -20.7
+    intensity2RmsDb: -16
+    tailDropDb: NaN
+    brightnessHz: 397
+    pulse: 1.2
+    onsets: 0.76
+    trimDb: -8.9
+    mood:
+    - 0.38582626
+    - 0.58122253
+    - 0.4401125
+    - 0.41870627
+  - title: Epiphone
+    folder: Ethereal Music Pack/Ethereal Music Pack/Epiphone (RT 4)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 21d984a0a16200148b86bb2d82f65d84, type: 3}
+    intensity2: {fileID: 8300000, guid: 097e73cc1fad69b4fb2541924080a7da, type: 3}
+    main: {fileID: 8300000, guid: 4ee0c966aa1caf3408edd46774b5a3f6, type: 3}
+    cut30: {fileID: 8300000, guid: 51ccd4e4dd1066f4f81ec8912da89c72, type: 3}
+    cut60: {fileID: 8300000, guid: 97661875cbd081943bbf82bb8832e5aa, type: 3}
+    tail: 4
+    duration: 100
+    loop: 96
+    cut30Seconds: 36
+    cut60Seconds: 68
+    mainRmsDb: -16.3
+    intensity1RmsDb: -19.8
+    intensity2RmsDb: -17.2
+    tailDropDb: NaN
+    brightnessHz: 469
+    pulse: 2
+    onsets: 1.55
+    trimDb: -6.700001
+    mood:
+    - 0.25209996
+    - 0.22479998
+    - 0.07099998
+    - 0.0755
+  - title: Ether
+    folder: Ethereal Music Pack/Ethereal Music Pack/Ether (RT 3.556)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 0da9f84b6a803ce4e9e33433ad176837, type: 3}
+    intensity2: {fileID: 8300000, guid: 5a56c31bcc8179644ab95bca775bfede, type: 3}
+    main: {fileID: 8300000, guid: b84808aec2ad91d409e5988d309fb202, type: 3}
+    cut30: {fileID: 8300000, guid: 3f5f0652d0f4f1d4cbcd9f81ecbe51d2, type: 3}
+    cut60: {fileID: 8300000, guid: fd9d524abb4d0dd49ad601d6c35f2083, type: 3}
+    tail: 3.556
+    duration: 90.667
+    loop: 87.111
+    cut30Seconds: 37.33
+    cut60Seconds: 69.33
+    mainRmsDb: -16.7
+    intensity1RmsDb: -18.7
+    intensity2RmsDb: -17.3
+    tailDropDb: NaN
+    brightnessHz: 446
+    pulse: 1.65
+    onsets: 0.8
+    trimDb: -6.299999
+    mood:
+    - 0.355875
+    - 0.38770312
+    - 0.22359376
+    - 0.22898439
+  - title: Golden Clouds
+    folder: Ethereal Music Pack/Ethereal Music Pack/Golden Clouds (RT 3.692)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: bfe76f41d6160e248b2be1740c2ec60a, type: 3}
+    intensity2: {fileID: 8300000, guid: 85cba14b56414a3478c920a363157f53, type: 3}
+    main: {fileID: 8300000, guid: b3403a335ca769b4eaa3249ec9c796a2, type: 3}
+    cut30: {fileID: 8300000, guid: 51922da292e966741814533167127c09, type: 3}
+    cut60: {fileID: 8300000, guid: 260b06e81bf770d4780792f6c44e78ea, type: 3}
+    tail: 3.692
+    duration: 92.308
+    loop: 88.616
+    cut30Seconds: 33.23
+    cut60Seconds: 62.77
+    mainRmsDb: -14.8
+    intensity1RmsDb: -19.3
+    intensity2RmsDb: -17.2
+    tailDropDb: NaN
+    brightnessHz: 498
+    pulse: 1.08
+    onsets: 0.08
+    trimDb: -8.2
+    mood:
+    - 0.7585925
+    - 0.6606525
+    - 0.52215
+    - 0.63572496
+  - title: Heartbeat
+    folder: Ethereal Music Pack/Ethereal Music Pack/Heartbeat (RT 3.2)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: cbe018e6f5551fc49b14bcb25d259523, type: 3}
+    intensity2: {fileID: 8300000, guid: c132350d52daedf41af5aa36b4bf2a2f, type: 3}
+    main: {fileID: 8300000, guid: 7d569c6bfdcbe25479d6b70b3c6fc0d6, type: 3}
+    cut30: {fileID: 8300000, guid: 2d1a70fe6d6468245a6733180da31a9c, type: 3}
+    cut60: {fileID: 8300000, guid: a8c1e3518d213a8468b2a7cdbb969457, type: 3}
+    tail: 3.2
+    duration: 96
+    loop: 92.8
+    cut30Seconds: 28.8
+    cut60Seconds: 67.2
+    mainRmsDb: -16.8
+    intensity1RmsDb: -19.8
+    intensity2RmsDb: -17.6
+    tailDropDb: NaN
+    brightnessHz: 447
+    pulse: 1.37
+    onsets: 0.44
+    trimDb: -6.200001
+    mood:
+    - 0.49726066
+    - 0.55433816
+    - 0.4009875
+    - 0.42808127
+  - title: Luminesce
+    folder: Ethereal Music Pack/Ethereal Music Pack/Luminesce (RT 4.091)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 00c59edfb2357f340b7505dc3bfb3841, type: 3}
+    intensity2: {fileID: 8300000, guid: 306faa508a1d88946b57c54b921173ef, type: 3}
+    main: {fileID: 8300000, guid: f5ca10060328dbf44a85fde4bbaca001, type: 3}
+    cut30: {fileID: 8300000, guid: c53649dca3a32234998daf301133a625, type: 3}
+    cut60: {fileID: 8300000, guid: 20733dae3dfcfe44a8eaf471eadf67a3, type: 3}
+    tail: 4.091
+    duration: 91.364
+    loop: 87.272995
+    cut30Seconds: 36.82
+    cut60Seconds: 69.55
+    mainRmsDb: -17.4
+    intensity1RmsDb: -24
+    intensity2RmsDb: -22.5
+    tailDropDb: NaN
+    brightnessHz: 395
+    pulse: 1.61
+    onsets: 0.45
+    trimDb: -5.6000004
+    mood:
+    - 0.36327496
+    - 0.55439997
+    - 0.41085
+    - 0.38582498
+  - title: Poison Meadow
+    folder: Ethereal Music Pack/Ethereal Music Pack/Poison Meadow (RT 2)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: e5d390d4120fdbf4d9158468cfba16ae, type: 3}
+    intensity2: {fileID: 8300000, guid: 60e7f652fb44f9f48adb9065b895b952, type: 3}
+    main: {fileID: 8300000, guid: 1c5062fdaf6902642afac025ad7a6d61, type: 3}
+    cut30: {fileID: 8300000, guid: 8a629b7088e38324eb72464520a721a7, type: 3}
+    cut60: {fileID: 8300000, guid: 33437dbde130ea44c8cad96ffd948995, type: 3}
+    tail: 2
+    duration: 98
+    loop: 96
+    cut30Seconds: 34
+    cut60Seconds: 66
+    mainRmsDb: -18.2
+    intensity1RmsDb: -24.5
+    intensity2RmsDb: -20.8
+    tailDropDb: NaN
+    brightnessHz: 751
+    pulse: 1.12
+    onsets: 0.07
+    trimDb: -4.799999
+    mood:
+    - 1.1487937
+    - 0.29725313
+    - 0.06800625
+    - 0.40109062
+  - title: Stairway
+    folder: Ethereal Music Pack/Ethereal Music Pack/Stairway (RT 4)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: d39b9683263ff814c9e54a05b025fba3, type: 3}
+    intensity2: {fileID: 8300000, guid: 4e1f01a4ed3a563499fccb7e82e1a338, type: 3}
+    main: {fileID: 8300000, guid: c3496da7534afc946a2b10e2dfea6f29, type: 3}
+    cut30: {fileID: 8300000, guid: 7cfc748290df2934ab409b961013a49d, type: 3}
+    cut60: {fileID: 8300000, guid: cc7c2786bd7473c46be5205b3764ac22, type: 3}
+    tail: 4
+    duration: 89.333
+    loop: 85.333
+    cut30Seconds: 36
+    cut60Seconds: 68
+    mainRmsDb: -15.2
+    intensity1RmsDb: -20.9
+    intensity2RmsDb: -17.4
+    tailDropDb: NaN
+    brightnessHz: 582
+    pulse: 1.41
+    onsets: 0.74
+    trimDb: -7.8
+    mood:
+    - 0.61433744
+    - 0.28990313
+    - 0.08446876
+    - 0.2069219
+  - title: Wind Chime
+    folder: Ethereal Music Pack/Ethereal Music Pack/Wind Chime (RT 5.647)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 5f74cbdc1fdb07c4699078b7bfe54ee5, type: 3}
+    intensity2: {fileID: 8300000, guid: 1b4598e1928fac8409edc3e60bb55696, type: 3}
+    main: {fileID: 8300000, guid: 2b24c207916a09244bb30c51f3eae275, type: 3}
+    cut30: {fileID: 8300000, guid: efe2ee5c7c26128419208811645a3e99, type: 3}
+    cut60: {fileID: 8300000, guid: d7feb0ed531c0b64daa84464df69a2d6, type: 3}
+    tail: 5.647
+    duration: 96
+    loop: 90.353
+    cut30Seconds: 39.53
+    cut60Seconds: 62.12
+    mainRmsDb: -12.4
+    intensity1RmsDb: -21.9
+    intensity2RmsDb: -17.9
+    tailDropDb: NaN
+    brightnessHz: 338
+    pulse: 1.15
+    onsets: 0.08
+    trimDb: -10.6
+    mood:
+    - 0.42623168
+    - 0.9175981
+    - 0.8436438
+    - 0.7789427
+  - title: Air Flows
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Air Flows (RT 7.124)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 6bf9ba42118b4794a8a17597759f4279, type: 3}
+    intensity2: {fileID: 8300000, guid: 6cffdd9a8e1d4db4999c10873e161612, type: 3}
+    main: {fileID: 8300000, guid: 91ef20d65a0a2334587a8da916679bf0, type: 3}
+    cut30: {fileID: 8300000, guid: 7931321345cb278489551a3cfe31e0b6, type: 3}
+    cut60: {fileID: 8300000, guid: f745a6e47763f144498933d4386ebdbb, type: 3}
+    tail: 7.124
+    duration: 97.617
+    loop: 90.493
+    cut30Seconds: 37.62
+    cut60Seconds: 71.37
+    mainRmsDb: -13.7
+    intensity1RmsDb: -13.4
+    intensity2RmsDb: -16.2
+    tailDropDb: NaN
+    brightnessHz: 792
+    pulse: 1.86
+    onsets: 0.97
+    trimDb: -9.3
+    mood:
+    - 0.54814374
+    - 0.06252812
+    - 0.05
+    - 0.05
+  - title: Angelic Dunes
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Angelic Dunes (RT
+      7.184)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 5487925b144af43428032c1e51f8d785, type: 3}
+    intensity2: {fileID: 8300000, guid: 4a77300a23eec444fbaac36c20dd171a, type: 3}
+    main: {fileID: 8300000, guid: db48e8027e001aa4fb1ea667362997d3, type: 3}
+    cut30: {fileID: 8300000, guid: 9303ab9f5e454854e92df671c51f3153, type: 3}
+    cut60: {fileID: 8300000, guid: 8c9013639fe1c9c49bfbeb804d284257, type: 3}
+    tail: 7.184
+    duration: 100.669
+    loop: 93.485
+    cut30Seconds: 40.67
+    cut60Seconds: 71.64
+    mainRmsDb: -14.3
+    intensity1RmsDb: -14.9
+    intensity2RmsDb: -13.7
+    tailDropDb: NaN
+    brightnessHz: 409
+    pulse: 2.05
+    onsets: 0.85
+    trimDb: -8.7
+    mood:
+    - 0.25565314
+    - 0.35380316
+    - 0.2023125
+    - 0.17834377
+  - title: Direct Sunlight
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Direct Sunlight
+      (RT 11.045)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 7f29a93d9e6fe5044934531a4ba972bb, type: 3}
+    intensity2: {fileID: 8300000, guid: 884c3389778607d4997e9490184cd9de, type: 3}
+    main: {fileID: 8300000, guid: d255ca1117d8ca945acd0b9c04b2b372, type: 3}
+    cut30: {fileID: 8300000, guid: 12541bb8ac243c1418bfc05a3bcc79f0, type: 3}
+    cut60: {fileID: 8300000, guid: 11df00a2831ccf2408448ea5b983fb3d, type: 3}
+    tail: 11.045
+    duration: 100.48
+    loop: 89.435005
+    cut30Seconds: 41.88
+    cut60Seconds: 68.39
+    mainRmsDb: -13.4
+    intensity1RmsDb: -13.6
+    intensity2RmsDb: -14.4
+    tailDropDb: NaN
+    brightnessHz: 409
+    pulse: 1.12
+    onsets: 0.37
+    trimDb: -9.6
+    mood:
+    - 0.50510687
+    - 0.7088081
+    - 0.585825
+    - 0.5885
+  - title: Glowing
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Glowing (RT 8.000)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 0065c6565a25f0b47a5de3861c0cab83, type: 3}
+    intensity2: {fileID: 8300000, guid: bd22a478cc06bc145add31a0a6a5b5ea, type: 3}
+    main: {fileID: 8300000, guid: 6a42cda3180666a4fb05651c94c1f53f, type: 3}
+    cut30: {fileID: 8300000, guid: 691f7fed89a34e34f9ee1d441c7fc5a0, type: 3}
+    cut60: {fileID: 8300000, guid: 1819866cad3eff64fa3db9b905d9a8be, type: 3}
+    tail: 8
+    duration: 104.008
+    loop: 96.008
+    cut30Seconds: 38.01
+    cut60Seconds: 69.51
+    mainRmsDb: -13.7
+    intensity1RmsDb: -14.7
+    intensity2RmsDb: -13.9
+    tailDropDb: NaN
+    brightnessHz: 526
+    pulse: 0.96
+    onsets: 0.22
+    trimDb: -9.3
+    mood:
+    - 0.80827993
+    - 0.60544
+    - 0.45319998
+    - 0.5962
+  - title: Meteor Darts
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Meteor Darts (RT
+      14.028)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 02a43724e8d433442a4b7cc79140ba6d, type: 3}
+    intensity2: {fileID: 8300000, guid: 771c673d04b9d1e4296e0669bbeb54f7, type: 3}
+    main: {fileID: 8300000, guid: f6ddcdd51e9acd6498e6cccb63d5d5f1, type: 3}
+    cut30: {fileID: 8300000, guid: 5aa8ccac29a5da341bb25aabd01d05b3, type: 3}
+    cut60: {fileID: 8300000, guid: 6ecf28ed59b6e1c49b59d730150876a4, type: 3}
+    tail: 14.028
+    duration: 104.485
+    loop: 90.457
+    cut30Seconds: 38.13
+    cut60Seconds: 69.19
+    mainRmsDb: -13.2
+    intensity1RmsDb: -14.8
+    intensity2RmsDb: -14.1
+    tailDropDb: NaN
+    brightnessHz: 600
+    pulse: 1.23
+    onsets: 0.15
+    trimDb: -9.8
+    mood:
+    - 0.8867166
+    - 0.42744997
+    - 0.2324
+    - 0.4371333
+  - title: Mystics
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Mystics (RT 13.197)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: a8090b2330ae1b248805cd452ccf121c, type: 3}
+    intensity2: {fileID: 8300000, guid: 607111ddabb84e342a9da6ca42a3053a, type: 3}
+    main: {fileID: 8300000, guid: 3aea23b54bee2fa4abb3720d83c9efcc, type: 3}
+    cut30: {fileID: 8300000, guid: 6b6082281236d784e8b011600af6eaf5, type: 3}
+    cut60: {fileID: 8300000, guid: 6da87d4c1bb3adf44b5315bebf437d11, type: 3}
+    tail: 13.197
+    duration: 102.098
+    loop: 88.901
+    cut30Seconds: 37.27
+    cut60Seconds: 68.3
+    mainRmsDb: -12.8
+    intensity1RmsDb: -14.8
+    intensity2RmsDb: -16.4
+    tailDropDb: NaN
+    brightnessHz: 342
+    pulse: 0.84
+    onsets: 0.11
+    trimDb: -10.2
+    mood:
+    - 0.4909375
+    - 1.0169532
+    - 0.96796876
+    - 0.91367185
+  - title: Space Time
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Space Time (RT
+      10.000)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 7b3d3b5d81ae3024886969d717f7769f, type: 3}
+    intensity2: {fileID: 8300000, guid: b6dd76dfac5f4cf4b8fc909be126b9d6, type: 3}
+    main: {fileID: 8300000, guid: ec4962311a665f54daf5d3990701a4df, type: 3}
+    cut30: {fileID: 8300000, guid: 4b23ca4b33309eb4ba41f726ceea9361, type: 3}
+    cut60: {fileID: 8300000, guid: 4a35f2812e062f344a5550fcc71d6b59, type: 3}
+    tail: 10
+    duration: 106.01
+    loop: 96.01
+    cut30Seconds: 39.01
+    cut60Seconds: 72.01
+    mainRmsDb: -13.2
+    intensity1RmsDb: -14.7
+    intensity2RmsDb: -15.6
+    tailDropDb: NaN
+    brightnessHz: 452
+    pulse: 1.44
+    onsets: 0.58
+    trimDb: -9.8
+    mood:
+    - 0.45694
+    - 0.48977003
+    - 0.32830003
+    - 0.35175005
+  - title: Time Warps
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Time Warps (RT
+      8.092)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: b94f9d92ea1d17646bc4fa14f0bc48a3, type: 3}
+    intensity2: {fileID: 8300000, guid: 5fa53dec46c821145bfa6d0c03dff69d, type: 3}
+    main: {fileID: 8300000, guid: aaebf0c0818ec464b84f68b8429974af, type: 3}
+    cut30: {fileID: 8300000, guid: 13d2a45d05d1dc64487c93ee9ac5ef84, type: 3}
+    cut60: {fileID: 8300000, guid: c9851ee7855ff4c458d32fff4317d287, type: 3}
+    tail: 8.092
+    duration: 97.703
+    loop: 89.611
+    cut30Seconds: 37.7
+    cut60Seconds: 68.4
+    mainRmsDb: -13.5
+    intensity1RmsDb: -16
+    intensity2RmsDb: -14.1
+    tailDropDb: NaN
+    brightnessHz: 583
+    pulse: 1.27
+    onsets: 0.45
+    trimDb: -9.5
+    mood:
+    - 0.74630374
+    - 0.3773425
+    - 0.17693754
+    - 0.3343188
+  - title: Timelapse
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Timelapse (RT 12.000)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 05679c9c6e675bd4dbb9be28c9ac2f46, type: 3}
+    intensity2: {fileID: 8300000, guid: 90e901fe9fe68ae4dbd51450797eb5d7, type: 3}
+    main: {fileID: 8300000, guid: a93115f158d8a724d9aa27fca5f93696, type: 3}
+    cut30: {fileID: 8300000, guid: c06cda37b7f6fcb498a4b839d0daea21, type: 3}
+    cut60: {fileID: 8300000, guid: 9d564d1423f86584b948e11c7fa156ce, type: 3}
+    tail: 12
+    duration: 108.015
+    loop: 96.015
+    cut30Seconds: 38.42
+    cut60Seconds: 69.62
+    mainRmsDb: -14.5
+    intensity1RmsDb: -13.5
+    intensity2RmsDb: -13.8
+    tailDropDb: NaN
+    brightnessHz: 605
+    pulse: 1.13
+    onsets: 0.14
+    trimDb: -8.5
+    mood:
+    - 0.93360317
+    - 0.44482815
+    - 0.25296253
+    - 0.47376877
+  - title: Winds of Time
+    folder: Ethereal Music Pack Vol. 3/Ethereal Music Pack Vol. 3/Winds of Time (RT
+      8.092)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 1384ff3c0d1dc2c45902848fabc7563d, type: 3}
+    intensity2: {fileID: 8300000, guid: 286efa3ebfa4b884ab4bf046246977b3, type: 3}
+    main: {fileID: 8300000, guid: 4bbe79c878129484c909405adfa5356f, type: 3}
+    cut30: {fileID: 8300000, guid: d9cbb8edf6454e846b63356dc66e2a34, type: 3}
+    cut60: {fileID: 8300000, guid: 9dd264670bcfffe4c9fb4f450e650123, type: 3}
+    tail: 8.092
+    duration: 97.696
+    loop: 89.604
+    cut30Seconds: 39.77
+    cut60Seconds: 68.39
+    mainRmsDb: -12.2
+    intensity1RmsDb: -14.9
+    intensity2RmsDb: -14
+    tailDropDb: NaN
+    brightnessHz: 338
+    pulse: 1.13
+    onsets: 0.13
+    trimDb: -10.8
+    mood:
+    - 0.42039666
+    - 0.90644
+    - 0.8299
+    - 0.7646833
+  - title: Angels
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/Angels (RT 3.75)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 78336e579586d6149ac50313786a6c54, type: 3}
+    intensity2: {fileID: 8300000, guid: 92f9d923240f0cc4fa8bb120705467b0, type: 3}
+    main: {fileID: 8300000, guid: d4542a3377c65064092880353714fa36, type: 3}
+    cut30: {fileID: 8300000, guid: 9514efdece2a71e4b92095b7ec966533, type: 3}
+    cut60: {fileID: 8300000, guid: 135d52e3c43b96843865c6de3870a696, type: 3}
+    tail: 3.75
+    duration: 93.75
+    loop: 90
+    cut30Seconds: 33.75
+    cut60Seconds: 63.75
+    mainRmsDb: -15.1
+    intensity1RmsDb: -18.5
+    intensity2RmsDb: -17.5
+    tailDropDb: NaN
+    brightnessHz: 453
+    pulse: 1
+    onsets: 0.09
+    trimDb: -7.8999996
+    mood:
+    - 0.6874793
+    - 0.7628381
+    - 0.6498
+    - 0.7174875
+  - title: Banana Trees
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/Banana Trees (RT
+      2.667)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: fda85acf274e8894bac55a3c2763e552, type: 3}
+    intensity2: {fileID: 8300000, guid: 012b74e88f4960040bdf591d7447bae9, type: 3}
+    main: {fileID: 8300000, guid: e7a0d47886a5f614a953169787517f0c, type: 3}
+    cut30: {fileID: 8300000, guid: 35d87667bfd8b4046830322f299b31a1, type: 3}
+    cut60: {fileID: 8300000, guid: a4a0b27e8d6982f46b297bc65ddeb76d, type: 3}
+    tail: 2.667
+    duration: 88
+    loop: 85.333
+    cut30Seconds: 34.67
+    cut60Seconds: 61.33
+    mainRmsDb: -15.7
+    intensity1RmsDb: -28.5
+    intensity2RmsDb: -21.8
+    tailDropDb: NaN
+    brightnessHz: 301
+    pulse: 0.75
+    onsets: 0.09
+    trimDb: -7.3
+    mood:
+    - 0.42516288
+    - 1.1391824
+    - 1.1218125
+    - 1.0208895
+  - title: Bits
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/Bits (RT 5.333)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 40b84024f7801e640b1d0a192b66ec33, type: 3}
+    intensity2: {fileID: 8300000, guid: 5c754b1f1abccd7439d409ddee0295c8, type: 3}
+    main: {fileID: 8300000, guid: 9f5a88f8850ad1145af01de84785b73e, type: 3}
+    cut30: {fileID: 8300000, guid: 833f6bed35dd7124bb834156f3347027, type: 3}
+    cut60: {fileID: 8300000, guid: 508b503f62fe46c4a9e66dbfa76808cc, type: 3}
+    tail: 5.333
+    duration: 90.667
+    loop: 85.334
+    cut30Seconds: 37.33
+    cut60Seconds: 69.33
+    mainRmsDb: -16.8
+    intensity1RmsDb: -28
+    intensity2RmsDb: -20.3
+    tailDropDb: NaN
+    brightnessHz: 484
+    pulse: 0.63
+    onsets: 0
+    trimDb: -6.200001
+    mood:
+    - 0.86399996
+    - 0.832
+    - 0.74
+    - 0.87
+  - title: Cybernetic
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/Cybernetic (RT
+      4.8)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 18786d0a40594ff4a9bf5818de3316a5, type: 3}
+    intensity2: {fileID: 8300000, guid: 59086252f7cb1a74d92edb187f5ef9ac, type: 3}
+    main: {fileID: 8300000, guid: c647177a8e00e84469681b0439e47f05, type: 3}
+    cut30: {fileID: 8300000, guid: 6ce0a484296fa86458c0f05acd8406ba, type: 3}
+    cut60: {fileID: 8300000, guid: 92849daa4b1be824e90a4b788565984a, type: 3}
+    tail: 4.8
+    duration: 91.2
+    loop: 86.399994
+    cut30Seconds: 33.6
+    cut60Seconds: 62.4
+    mainRmsDb: -14.8
+    intensity1RmsDb: -21.6
+    intensity2RmsDb: -15.2
+    tailDropDb: NaN
+    brightnessHz: 499
+    pulse: 1.54
+    onsets: 1.31
+    trimDb: -8.2
+    mood:
+    - 0.3565975
+    - 0.26803
+    - 0.094325
+    - 0.12556252
+  - title: Doves
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/Doves (RT 4.364)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 4e8875b1444af904296559723787dfce, type: 3}
+    intensity2: {fileID: 8300000, guid: 0745100433daf8540a611d53216105a9, type: 3}
+    main: {fileID: 8300000, guid: 0cb50df0172287144aa137be2f0ac386, type: 3}
+    cut30: {fileID: 8300000, guid: 04559555c59cd0647bc24899f03f06bc, type: 3}
+    cut60: {fileID: 8300000, guid: aaec7e5a88e045740bd2a1c033940192, type: 3}
+    tail: 4.364
+    duration: 91.636
+    loop: 87.272
+    cut30Seconds: 39.27
+    cut60Seconds: 65.45
+    mainRmsDb: -16.4
+    intensity1RmsDb: -23
+    intensity2RmsDb: -17.8
+    tailDropDb: NaN
+    brightnessHz: 598
+    pulse: 0.9
+    onsets: 0
+    trimDb: -6.6000004
+    mood:
+    - 1.0486417
+    - 0.55004996
+    - 0.38475
+    - 0.63570833
+  - title: Dramatic Bell
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/Dramatic Bell (RT
+      3.692)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 838c1ef16c182e049a794c9637033415, type: 3}
+    intensity2: {fileID: 8300000, guid: 70654488f82b6f045ac5c46234f23406, type: 3}
+    main: {fileID: 8300000, guid: 2d9fd3f260498cb49a2a2fbdd05cad56, type: 3}
+    cut30: {fileID: 8300000, guid: 8c64564b2627911438d06ca34593f911, type: 3}
+    cut60: {fileID: 8300000, guid: 2b56e462e17a0794da061859adf99e9b, type: 3}
+    tail: 3.692
+    duration: 92.308
+    loop: 88.616
+    cut30Seconds: 33.23
+    cut60Seconds: 62.77
+    mainRmsDb: -13.7
+    intensity1RmsDb: -21.3
+    intensity2RmsDb: -14.2
+    tailDropDb: NaN
+    brightnessHz: 427
+    pulse: 1.14
+    onsets: 0.39
+    trimDb: -9.3
+    mood:
+    - 0.52826726
+    - 0.66748315
+    - 0.5349375
+    - 0.5540896
+  - title: Light Flourish
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/Light Flourish
+      (RT 4.174)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: ee0f39cf135b38643850b7ee85001ab9, type: 3}
+    intensity2: {fileID: 8300000, guid: e73b2c276efa5f546962b0f64ab781b5, type: 3}
+    main: {fileID: 8300000, guid: a36037064a20efa429f28226ff2cf016, type: 3}
+    cut30: {fileID: 8300000, guid: 453340cdd8200414cb4416eac7018dca, type: 3}
+    cut60: {fileID: 8300000, guid: 550521c0c3e5c4e4082ff6f98d273210, type: 3}
+    tail: 4.174
+    duration: 96
+    loop: 91.826004
+    cut30Seconds: 37.57
+    cut60Seconds: 62.61
+    mainRmsDb: -15.2
+    intensity1RmsDb: -18.1
+    intensity2RmsDb: -17.9
+    tailDropDb: NaN
+    brightnessHz: 469
+    pulse: 1.51
+    onsets: 0.95
+    trimDb: -7.8
+    mood:
+    - 0.38280666
+    - 0.35952002
+    - 0.18900001
+    - 0.21023335
+  - title: Mermaid
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/Mermaid (RT 3.2)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 1f9db318daa944d4bb4e3bbf29f136cd, type: 3}
+    intensity2: {fileID: 8300000, guid: 97dad3e59bc268342a7b9c911e2bbda5, type: 3}
+    main: {fileID: 8300000, guid: 2cbe2b2a359835b4388cf575c3ea5691, type: 3}
+    cut30: {fileID: 8300000, guid: 37b754ceb8948524c97a5c3d4e16b1c1, type: 3}
+    cut60: {fileID: 8300000, guid: ade5bd66e5ceb5544ab888a895800898, type: 3}
+    tail: 3.2
+    duration: 92.8
+    loop: 89.600006
+    cut30Seconds: 35.2
+    cut60Seconds: 67.2
+    mainRmsDb: -15.7
+    intensity1RmsDb: -18.8
+    intensity2RmsDb: -17.6
+    tailDropDb: NaN
+    brightnessHz: 715
+    pulse: 1.29
+    onsets: 0.63
+    trimDb: -7.3
+    mood:
+    - 0.8675917
+    - 0.1720125
+    - 0.05
+    - 0.16969584
+  - title: Peace Lily
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/Peace Lily (RT
+      4)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: 57c79294a24c42e4d95e07f34a6156da, type: 3}
+    intensity2: {fileID: 8300000, guid: f472d38b2c558d44ea77ab6fa99be0dc, type: 3}
+    main: {fileID: 8300000, guid: 4fdcf4ee9b0a0a741bbeeaf89a4c6fd1, type: 3}
+    cut30: {fileID: 8300000, guid: 6b8dddd8234edfa438ef141a3a280cdd, type: 3}
+    cut60: {fileID: 8300000, guid: b6babf4d35885294281cde0304eaca9b, type: 3}
+    tail: 4
+    duration: 92
+    loop: 88
+    cut30Seconds: 36
+    cut60Seconds: 68
+    mainRmsDb: -14.9
+    intensity1RmsDb: -19.1
+    intensity2RmsDb: -18.8
+    tailDropDb: NaN
+    brightnessHz: 280
+    pulse: 0.79
+    onsets: 0.02
+    trimDb: -8.1
+    mood:
+    - 0.4287104
+    - 1.1536281
+    - 1.1402562
+    - 1.038549
+  - title: The Tropics
+    folder: Ethereal Music Pack Vol. 4/Ethereal Music Pack Vol. 4/The Tropics (RT
+      4.8)
+    enabled: 1
+    userWeight: 1
+    intensity1: {fileID: 8300000, guid: bc435e824a610b44da389ba6887d1f14, type: 3}
+    intensity2: {fileID: 8300000, guid: 569f97745b385384597ed431b12bd0c8, type: 3}
+    main: {fileID: 8300000, guid: 9a97d2fe943969247a5b15e00ffa8e89, type: 3}
+    cut30: {fileID: 8300000, guid: bcf7358925a75344f832d25d5ee8f5e3, type: 3}
+    cut60: {fileID: 8300000, guid: 9f294d3b28b117d4a93c5ad79a7b60b3, type: 3}
+    tail: 4.8
+    duration: 100.8
+    loop: 96
+    cut30Seconds: 33.6
+    cut60Seconds: 62.4
+    mainRmsDb: -17
+    intensity1RmsDb: -19.9
+    intensity2RmsDb: -18.3
+    tailDropDb: NaN
+    brightnessHz: 593
+    pulse: 1.22
+    onsets: 0.45
+    trimDb: -6
+    mood:
+    - 0.7790256
+    - 0.3732581
+    - 0.1704375
+    - 0.34150627

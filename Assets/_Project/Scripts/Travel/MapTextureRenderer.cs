@@ -20,13 +20,12 @@ namespace MedievalZen.Travel
         /// <summary>Blank border of the sheet (fraction per side).</summary>
         public const float SheetMargin = 0.07f;
 
-        private static readonly Color Paper = new Color(0.9f, 0.82f, 0.64f);
-        private static readonly Color InkBrown = new Color(0.24f, 0.15f, 0.08f);
-        private static readonly Color RoadInk = new Color(0.46f, 0.27f, 0.12f);
-        private static readonly Color WaterWash = new Color(0.62f, 0.72f, 0.74f);
-        private static readonly Color WaterInk = new Color(0.2f, 0.32f, 0.4f);
-        private static readonly Color ForestWash = new Color(0.86f, 0.93f, 0.76f);
-        private static readonly Color ForestInk = new Color(0.2f, 0.3f, 0.15f);
+        private static readonly Color Paper = MapInk.Paper;
+        private static readonly Color InkBrown = MapInk.InkBrown;
+        private static readonly Color RoadInk = MapInk.RoadInk;
+        private static readonly Color WaterInk = MapInk.WaterInk;
+        private static readonly Color ForestWash = MapInk.ForestWash;
+        private static readonly Color ForestInk = MapInk.ForestInk;
 
         /// <summary>The projection used for <paramref name="world"/>'s terrain (its square footprint).</summary>
         public static MapProjection ProjectionFor(GameWorld world)
@@ -149,7 +148,6 @@ namespace MedievalZen.Travel
             int n = raster.Size;
             Color[] px = raster.Pixels;
             float mpp = projection.MetresPerUv / n;            // metres per pixel
-            var light = new Vector3(-1f, 1.35f, 1f).normalized; // from the north-west, fairly high
             const float contourStep = 20f;
 
             var h = new float[n * n];
@@ -176,28 +174,10 @@ namespace MedievalZen.Travel
                     if (!onWorld[i]) continue;
                     float dx = (h[i + 1] - h[i - 1]) / (2f * mpp);
                     float dz = (h[i + n] - h[i - n]) / (2f * mpp);
-                    var normal = new Vector3(-dx, 1f, -dz).normalized;
-                    float rel = Vector3.Dot(normal, light) / light.y;           // 1 on flat ground
-                    float shade = Mathf.Clamp(1f + (rel - 1f) * 1.25f, 0.5f, 1.12f);
                     float altitude = Mathf.Clamp01((h[i] - origin.y) / Mathf.Max(1f, tsize.y));
-                    shade *= Mathf.Lerp(1f, 0.9f, altitude * altitude);
 
-                    Color c = px[i];
-                    c = new Color(c.r * shade, c.g * shade, c.b * Mathf.Lerp(shade, 1f, 0.15f), 1f);
-
-                    // Faint anti-aliased contour lines every 20 m, stronger every 100 m.
-                    float level = h[i] / contourStep;
-                    float gradient = Mathf.Sqrt(dx * dx + dz * dz) * mpp / contourStep; // levels per pixel
-                    if (gradient > 1e-4f && gradient < 0.6f)
-                    {
-                        float distance = Mathf.Abs(level - Mathf.Round(level)) / gradient; // pixels to the nearest contour
-                        float line = Mathf.Clamp01(0.8f - distance);
-                        bool index = Mathf.Abs(Mathf.Round(level) % 5f) < 0.01f;
-                        float strength = line * (index ? 0.28f : 0.14f);
-                        c = Color.Lerp(c, InkBrown, strength);
-                    }
-
-                    px[i] = c;
+                    // North-west hillshade; faint anti-aliased contour lines every 20 m, stronger every 100 m.
+                    px[i] = MapInk.ShadeRelief(px[i], dx, dz, h[i], altitude, mpp, contourStep, 5f);
                 }
             }
 
@@ -212,21 +192,8 @@ namespace MedievalZen.Travel
                     int i = y * n + x;
                     if (!wet[i]) continue;
                     bool shore = !wet[i - 1] || !wet[i + 1] || !wet[i - n] || !wet[i + n];
-                    Color c = Color.Lerp(px[i], px[i] * WaterWash * 1.1f, 0.85f);
-                    c.a = 1f;
-
-                    // Wavy ripple hatching.
-                    float wave = Mathf.Sin((y + 2.2f * Mathf.Sin(x * 0.09f)) * (2f * Mathf.PI / 7f));
-                    if (wave > 0.82f) c = Color.Lerp(c, WaterInk, 0.22f * (wave - 0.82f) / 0.18f);
-                    px[i] = c;
-                    if (shore)
-                    {
-                        mask[i] = 1f;
-                        mask[i - 1] = Mathf.Max(mask[i - 1], 0.5f);
-                        mask[i + 1] = Mathf.Max(mask[i + 1], 0.5f);
-                        mask[i - n] = Mathf.Max(mask[i - n], 0.5f);
-                        mask[i + n] = Mathf.Max(mask[i + n], 0.5f);
-                    }
+                    px[i] = MapInk.ShadeWater(px[i], x, y);   // wash with wavy ripple hatching
+                    if (shore) MapInk.MarkShore(mask, i, n);
                 }
             }
 
@@ -281,9 +248,7 @@ namespace MedievalZen.Travel
                     float d = grid.Sample(w.x, w.z);
                     float p = Mathf.Clamp((d - 0.12f) / 1.1f, 0f, 0.95f);
                     if (roll >= p) continue;
-                    var c = new Vector2(jx, jy);
-                    raster.MaskRing(mask, c, 2.3f, 1f);
-                    raster.MaskDisc(mask, c + new Vector2(0f, -2.8f), 0.55f);
+                    MapInk.TreeMark(raster, mask, new Vector2(jx, jy));
                 }
             }
 
@@ -326,39 +291,14 @@ namespace MedievalZen.Travel
 
             foreach (Settlement s in roads.Settlements)
             {
-                Vector2 c = ToPixel(projection, s.Position, n);
-                switch (s.Type)
-                {
-                    case SettlementType.Town:
-                        raster.MaskRing(mask, c, 9f * scale, 2.2f * scale);
-                        raster.MaskDisc(mask, c, 3.4f * scale);
-                        break;
-                    case SettlementType.Village:
-                        raster.MaskRing(mask, c, 6.5f * scale, 1.9f * scale);
-                        raster.MaskDisc(mask, c, 1.6f * scale);
-                        break;
-                    default:
-                        float w = 5f * scale;
-                        float body = 4.5f * scale;
-                        raster.MaskConvex(mask, c + new Vector2(-w, -body), c + new Vector2(w, -body), c + new Vector2(w, body * 0.4f), c + new Vector2(-w, body * 0.4f));
-                        raster.MaskConvex(mask, c + new Vector2(-w - 1.5f * scale, body * 0.4f), c + new Vector2(w + 1.5f * scale, body * 0.4f), c + new Vector2(0f, body * 1.6f));
-                        break;
-                }
+                MapInk.SettlementIcon(raster, mask, ToPixel(projection, s.Position, n), s.Type, scale);
             }
 
             raster.Composite(mask, InkBrown, 0.95f);
         }
 
         /// <summary>Icon radius in pixels at 1024 px for a settlement type (the overlay uses it to place labels).</summary>
-        public static float IconRadius(SettlementType type)
-        {
-            switch (type)
-            {
-                case SettlementType.Town: return 9f;
-                case SettlementType.Village: return 6.5f;
-                default: return 7f;
-            }
-        }
+        public static float IconRadius(SettlementType type) => MapInk.IconRadius(type);
 
         private static void PaintLandmarks(MapRaster raster, float[] mask, IReadOnlyList<Landmark> landmarks, MapProjection projection)
         {
@@ -371,44 +311,18 @@ namespace MedievalZen.Travel
                 switch (landmark.kind)
                 {
                     case LandmarkKind.Peak:
-                        raster.MaskSegment(mask, c + new Vector2(-7f, -5f) * scale, c + new Vector2(0f, 6f) * scale, 1.3f * scale);
-                        raster.MaskSegment(mask, c + new Vector2(0f, 6f) * scale, c + new Vector2(7f, -5f) * scale, 1.3f * scale);
-                        raster.MaskSegment(mask, c + new Vector2(-3f, -5f) * scale, c + new Vector2(2f, 2f) * scale, 0.7f * scale);
+                        MapInk.PeakSign(raster, mask, c, scale);
                         break;
                     case LandmarkKind.Pass:
-                        // The cartographer's col sign: two arcs back to back, ")(".
-                        PassArc(raster, mask, c + new Vector2(-8.5f, 0f) * scale, 1f, scale);
-                        PassArc(raster, mask, c + new Vector2(8.5f, 0f) * scale, -1f, scale);
+                        MapInk.PassSign(raster, mask, c, scale);   // the cartographer's col sign, ")("
                         break;
                     case LandmarkKind.Viewpoint:
-                        // A small eye-like mark: a ring with short rays.
-                        raster.MaskRing(mask, c, 2.6f * scale, 1f * scale);
-                        for (int k = 0; k < 8; k++)
-                        {
-                            float a = k * Mathf.PI * 0.25f;
-                            var d = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
-                            raster.MaskSegment(mask, c + d * 4.5f * scale, c + d * 7.5f * scale, 0.75f * scale);
-                        }
-
+                        MapInk.ViewpointSign(raster, mask, c, scale);   // a ring with short rays
                         break;
                 }
             }
 
             raster.Composite(mask, InkBrown, 0.95f);
-        }
-
-        /// <summary>One bracket of the pass sign, bulging towards +x (<paramref name="facing"/> 1) or -x (-1), about 14 px tall at 1024 px.</summary>
-        private static void PassArc(MapRaster raster, float[] mask, Vector2 centre, float facing, float scale)
-        {
-            const int Pieces = 6;
-            Vector2 previous = default;
-            for (int i = 0; i <= Pieces; i++)
-            {
-                float a = Mathf.Lerp(-1.05f, 1.05f, i / (float)Pieces);
-                Vector2 point = centre + new Vector2(Mathf.Cos(a) * facing * 5f, Mathf.Sin(a) * 7.5f) * scale;
-                if (i > 0) raster.MaskSegment(mask, previous, point, 1.2f * scale);
-                previous = point;
-            }
         }
 
         private static void PaintFrame(MapRaster raster, float[] mask, MapProjection projection)

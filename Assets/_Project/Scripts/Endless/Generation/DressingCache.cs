@@ -21,8 +21,27 @@ namespace MedievalZen.Endless.Generation
         public readonly List<FieldPatch> Fields = new List<FieldPatch>();
         /// <summary>The settlement disc (local), or null.</summary>
         public SettlementSite Site;
+        /// <summary>
+        /// True when the ground paint and grass treat <see cref="Site"/> as a dirt square (inns); composed villages paint only
+        /// their <see cref="Paths"/> and <see cref="Yards"/> and keep the grass.
+        /// </summary>
+        public bool PaintSite = true;
+        /// <summary>Trees the dressing plants (orchards, the green), local.</summary>
+        public readonly List<TreePlacement> Trees = new List<TreePlacement>();
+        /// <summary>Worn paths (x0, z0, x1, z1), local.</summary>
+        public readonly List<Vector4> Paths = new List<Vector4>();
+        /// <summary>Trodden patches (x, radius, z), local.</summary>
+        public readonly List<Vector3> Yards = new List<Vector3>();
         /// <summary>Centre of the place (absolute) and a radius containing everything the dressing placed.</summary>
         public double CentreX, CentreZ, Reach;
+        /// <summary>The place's spots for its people (doors, the well, benches, gates, work places), local; empty for the finite dresser's places.</summary>
+        public readonly List<MedievalZen.People.PlaceAnchor> Anchors = new List<MedievalZen.People.PlaceAnchor>();
+        /// <summary>Inns: the archetype that stands (<see cref="InnArchetype"/>), or -1 (not an inn, or the shared dresser's).</summary>
+        public int InnStyle = -1;
+        /// <summary>Cobbled strips (local segment and width): a walled city's main street, square and lanes, painted on the cobblestone channel.</summary>
+        public readonly List<(float x0, float z0, float x1, float z1, float width)> Cobbles = new List<(float, float, float, float, float)>();
+        /// <summary>A walled city's numbers (see <see cref="CityComposer"/>), or null.</summary>
+        public CityStats City;
     }
 
     /// <summary>
@@ -60,6 +79,18 @@ namespace MedievalZen.Endless.Generation
 
         /// <summary>Dressing of a feature place (camp, viewpoint, the big cairn at a col).</summary>
         public Dressing Feature(FeaturePlace feature) => Get(feature.Place.Id, feature.Place.S, () => DressFeature(feature));
+
+        /// <summary>Dressing of a landmark (its structure, props, kept-clear circles and path stub; see <see cref="LandmarkDresser"/>).</summary>
+        public Dressing Landmark(LandmarkSite landmark, FieldMosaic mosaic) => Get(landmark.Id, landmark.S, () => DressLandmark(landmark, mosaic));
+
+        private Dressing DressLandmark(LandmarkSite landmark, FieldMosaic mosaic)
+        {
+            GenWindow w = Window(landmark.X, landmark.Z, LandmarkDresser.WindowSize, true);
+            var d = new Dressing { X0 = w.X0, Z0 = w.Z0, CentreX = landmark.X, CentreZ = landmark.Z };
+            OccupancyMap occupancy = LandmarkDresser.Dress(p, keys, road, field, mosaic, w, landmark, d);
+            Finish(d, occupancy, landmark.Id);
+            return d;
+        }
 
         private Dressing Get(int id, double s, Func<Dressing> make)
         {
@@ -100,9 +131,10 @@ namespace MedievalZen.Endless.Generation
         {
             double z = road.ZAt(place.S);
             double x = road.X(z);
-            bool fields = place.Kind != PlaceKind.Inn;
+            // A walled city plans no crop fields of its own: the farmland patchwork round it keeps out of the wall (FieldPatchwork).
+            bool fields = place.Kind != PlaceKind.Inn && !place.City;
             // The dressing itself on a 2 m grid just big enough for it (seated stone pieces need the true ground).
-            float size = place.Kind == PlaceKind.Village ? 304f : place.Kind == PlaceKind.Hamlet ? 240f : 176f;
+            float size = place.City ? 400f : place.Kind == PlaceKind.Village ? 304f : place.Kind == PlaceKind.Hamlet ? 240f : 176f;
             GenWindow w = Window(x, z, size, false);
             WorldGenParams wp = w.Params.Clone();
             wp.seed = EndlessNoise.Seed(p.seed, 701, place.Id);
@@ -119,7 +151,58 @@ namespace MedievalZen.Endless.Generation
 
             var d = new Dressing { X0 = w.X0, Z0 = w.Z0, CentreX = x, CentreZ = z };
             var occupancy = new OccupancyMap(w.Size);
-            SettlementDresser.Dress(wp, w.Map, network, w.Roads, keys, occupancy, d.Props, place.Refuge ? settlement.Id : -1);
+            // The stream channels near the place stay clear.
+            var streams = new List<StreamCourse>();
+            field.Streams?.Overlapping(w.X0, w.Z0, w.Size, 20.0, streams);
+            TileStreams.Occupy(w, streams, occupancy);
+            // The road through the place as a 2 m polyline, the place's centre at index 90.
+            var line = new List<Vector3>();
+            for (int k = -90; k <= 90; k++)
+            {
+                double sz = road.ZAt(place.S + 2.0 * k);
+                line.Add(new Vector3(w.LocalX(road.X(sz)), 0f, w.LocalZ(sz)));
+            }
+
+            if (place.Kind == PlaceKind.Inn)
+            {
+                // The endless road's own inn, by archetype (see InnStyles, InnComposer); the shared dresser only when the palette has no tavern or hut.
+                int stream = place.Refuge ? InnComposer.RefugeStream : InnComposer.Stream;
+                var inn = new SettlementKit(wp, w.Map, w.Roads, keys, occupancy, d.Props, line, 90, new System.Random(EndlessNoise.Seed(p.seed, stream, place.Id)));
+                InnSite innSite = field.Plan != null ? InnStyles.For(p, field.Plan, road, field, place)
+                    : new InnSite { Archetype = place.Refuge ? InnArchetype.Refuge : InnArchetype.Coaching };
+                if (InnComposer.Compose(inn, innSite, out InnArchetype built))
+                {
+                    TakeKit(d, inn);
+                    d.PaintSite = false;
+                    d.InnStyle = (int)built;
+                }
+                else
+                {
+                    d.Props.Clear();
+                    SettlementDresser.Dress(wp, w.Map, network, w.Roads, keys, occupancy, d.Props, place.Refuge ? settlement.Id : -1);
+                }
+            }
+            else if (place.City)
+            {
+                // A walled city in a village's slot (see CityComposer, JourneyPlan.IsCitySlot).
+                var kit = new SettlementKit(wp, w.Map, w.Roads, keys, occupancy, d.Props, line, 90, new System.Random(EndlessNoise.Seed(p.seed, CityComposer.Stream, place.Id)));
+                var cobbles = new List<(Vector3 a, Vector3 b, float width)>();
+                // The hill the terrain raised (TerrainField's disc), in the window's frame.
+                CityHill hill = CityHill.For(p.seed, place.Id, w.LocalX(x), w.LocalZ(z), road.Heading(z));
+                hill.Level = field.Disc(place).Level;   // the composer seats things on the hill's planned surface above the disc's level
+                d.City = CityComposer.Compose(kit, hill, cobbles);
+                foreach (var (a, b, width) in cobbles) d.Cobbles.Add((a.x, a.z, b.x, b.z, width));
+                TakeKit(d, kit);
+                d.PaintSite = false;
+            }
+            else
+            {
+                // Hamlets and villages: the endless road's own composition along the road (see VillageComposer).
+                var kit = new SettlementKit(wp, w.Map, w.Roads, keys, occupancy, d.Props, line, 90, new System.Random(EndlessNoise.Seed(p.seed, 1090, place.Id)));
+                VillageComposer.Compose(kit, place.Kind == PlaceKind.Village, place.Radius, VillageComposer.PlanFor(p.seed, field.Plan, place));
+                TakeKit(d, kit);
+                d.PaintSite = false;
+            }
             var site = new SettlementSite(place.Name ?? "Inn", place.DressAs, centre);
             d.Site = site;
             if (fields)
@@ -162,6 +245,14 @@ namespace MedievalZen.Endless.Generation
 
             Finish(d, occupancy, place.Id);
             return d;
+        }
+
+        private static void TakeKit(Dressing d, SettlementKit kit)
+        {
+            d.Trees.AddRange(kit.Trees);
+            d.Paths.AddRange(kit.Paths);
+            d.Yards.AddRange(kit.Yards);
+            d.Anchors.AddRange(kit.Anchors);
         }
 
         private void AddLeg(RoadNetworkBuilder builder, GenWindow w, RoadNode node, double s, double dir)
@@ -251,6 +342,12 @@ namespace MedievalZen.Endless.Generation
             foreach (PropPlacement prop in d.Props)
             {
                 double dx = d.X0 + prop.position.x - d.CentreX, dz = d.Z0 + prop.position.z - d.CentreZ;
+                reach = Math.Max(reach, Math.Sqrt(dx * dx + dz * dz) + 4.0);
+            }
+
+            foreach (TreePlacement tree in d.Trees)
+            {
+                double dx = d.X0 + tree.position.x - d.CentreX, dz = d.Z0 + tree.position.z - d.CentreZ;
                 reach = Math.Max(reach, Math.Sqrt(dx * dx + dz * dz) + 4.0);
             }
 

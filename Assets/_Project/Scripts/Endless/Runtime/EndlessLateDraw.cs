@@ -13,8 +13,11 @@ namespace MedievalZen.Endless
         /// <summary>The streamer that draws.</summary>
         public EndlessWorld World;
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("EndlessLateDraw (trees)");
+
         private void LateUpdate()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (World != null && World.isActiveAndEnabled) World.LateDraw();
         }
     }

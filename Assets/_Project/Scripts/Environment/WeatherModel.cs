@@ -166,6 +166,71 @@ namespace MedievalZen.Environment
         /// <summary>The preset used for <paramref name="state"/>.</summary>
         public WeatherPreset Preset(WeatherState state) => presets[(int)state];
 
+        private SeasonChoice season = SeasonChoice.Autumn;
+
+        /// <summary>
+        /// The season choice the schedule follows (2026-10-06; fixed autumn by default, the schedule the game always had). Each
+        /// slot draws with the weights of the year at that slot (<see cref="Season.YearFor"/> at the slot's middle), so under Auto
+        /// the weather turns with the seasons. Changing it rebuilds the schedule: the same seed and choice always give the same
+        /// sequence.
+        /// </summary>
+        public SeasonChoice Season
+        {
+            get => season;
+            set
+            {
+                if (value == season) return;
+                season = value;
+                states.Clear();
+            }
+        }
+
+        /// <summary>The year (<see cref="MedievalZen.Environment.Season"/>) at the middle of slot <paramref name="slot"/> under <see cref="Season"/>.</summary>
+        public float YearForSlot(long slot)
+        {
+            double middle = (slot + 0.5) * SlotHours;
+            int day = (int)Math.Floor(middle / DayClock.HoursPerDay) + 1;
+            float hour = (float)(middle - (day - 1) * (double)DayClock.HoursPerDay);
+            return MedievalZen.Environment.Season.YearFor(season, day, hour);
+        }
+
+        /// <summary>
+        /// Season multipliers on <see cref="Weight(WeatherState, float)"/>, per state (spring, summer; autumn is 1). Spring is
+        /// showery: much more light rain, little haze, fewer grey spells, so clear sky and showers alternate. Summer is clear or
+        /// hazy, with little rain and hardly any mist.
+        /// </summary>
+        private static readonly float[] SpringWeight = { 1.0f, 0.45f, 1.0f, 0.7f, 4.0f };
+        private static readonly float[] SummerWeight = { 1.35f, 1.9f, 0.12f, 0.45f, 0.35f };
+
+        /// <summary>
+        /// Relative likelihood of <paramref name="state"/> at clock <paramref name="hour"/> in a year of <see cref="MedievalZen.Environment.Season"/>:
+        /// <see cref="Weight(WeatherState, float)"/> at the season's sky hour (dawn mist comes at the season's dawn) times the
+        /// season's multiplier. At the identity (autumn) it is exactly <see cref="Weight(WeatherState, float)"/>.
+        /// </summary>
+        public static float Weight(WeatherState state, float hour, float year)
+        {
+            int i = (int)state;
+            if (i < 0 || i >= StateCount) return 0f;
+            float w = Weight(state, DayClock.SolarHour(hour, year));
+            return w * MedievalZen.Environment.Season.Blend(year, SpringWeight[i], SummerWeight[i], 1f);
+        }
+
+        /// <summary>
+        /// Chance that a slot keeps the previous state, in a year: the autumn figures (<see cref="StayProbability"/>, 0.6 of it
+        /// after rain) at the identity; spring's showers pass sooner and its weather turns more often.
+        /// </summary>
+        public float StayFor(WeatherState previous, float year)
+        {
+            float scale = MedievalZen.Environment.Season.Blend(year, 0.85f, 1.1f, 1f);
+            if (previous == WeatherState.LightRain)
+            {
+                float rainFactor = MedievalZen.Environment.Season.Blend(year, 0.35f, 0.5f, 0.6f);
+                return Math.Min(1f, StayProbability * rainFactor * scale);
+            }
+
+            return Math.Min(1f, StayProbability * scale);
+        }
+
         /// <summary>In-game hours since day 1, 00:00 (<paramref name="day"/> starts at 1).</summary>
         public static double AbsoluteHours(int day, float hour) => Math.Max(0, day - 1) * (double)DayClock.HoursPerDay + hour;
 
@@ -218,14 +283,15 @@ namespace MedievalZen.Environment
         private WeatherState Step(WeatherState previous, int slot)
         {
             var rng = new System.Random(unchecked(seed * 73856093 ^ slot * 19349663 ^ 0x5bd1e995));
-            float stay = previous == WeatherState.LightRain ? StayProbability * 0.6f : StayProbability;
+            float year = YearForSlot(slot);   // exactly the identity under fixed autumn: every figure below is then today's
+            float stay = StayFor(previous, year);
             if (slot > 0 && rng.NextDouble() < stay) return previous;
 
             float hour = (float)((slot + 0.5) * SlotHours % DayClock.HoursPerDay);
             float total = 0f;
             for (int i = 0; i < StateCount; i++)
             {
-                weights[i] = Weight((WeatherState)i, hour);
+                weights[i] = Weight((WeatherState)i, hour, year);
                 total += weights[i];
             }
 

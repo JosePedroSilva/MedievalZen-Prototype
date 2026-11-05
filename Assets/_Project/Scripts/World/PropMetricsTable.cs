@@ -70,7 +70,20 @@ namespace MedievalZen.World
             { "SM_Prop_StonePile_01", M(-0.44f, 0.00f, -0.38f, 0.44f, 1.49f, 0.35f, 180f, E, 0.03f, 0.03f, 0.04f, E, 0.02f, 0.00f, 0.00f, 0.01f, 0.03f, 0.01f, 0.00f, 0.00f, 0.01f, 0.02f, 0.02f, 0.01f, 0.00f, 0.00f, 0.02f, 0.05f, 0.03f, 0.02f, 0.02f, 0.07f) },
             { "SM_Prop_StonePile_02", M(-0.28f, 0.00f, -0.31f, 0.28f, 0.88f, 0.31f, 37f, 0.03f, 0.02f, 0.02f, 0.03f, 0.18f, 0.03f, 0.02f, 0.01f, 0.01f, 0.04f, 0.03f, 0.02f, 0.00f, 0.00f, 0.01f, 0.03f, 0.01f, 0.00f, 0.00f, 0.01f, 0.07f, 0.01f, 0.01f, 0.02f, 0.04f) },
             { "SM_Prop_StonePile_03", M(-0.48f, 0.00f, -0.46f, 0.48f, 1.53f, 0.46f, -130f, 0.23f, 0.06f, 0.01f, 0.04f, 0.05f, 0.03f, 0.03f, 0.01f, 0.03f, 0.03f, 0.00f, 0.01f, 0.01f, 0.03f, 0.04f, 0.00f, 0.00f, 0.01f, 0.01f, 0.09f, 0.03f, 0.05f, 0.01f, 0.01f, E) },
+            // POLYGON Fantasy Kingdom rocks (the endless road's pass ranges), measured 2026-10-05 the same way. Their names repeat
+            // the Meadow ones, so they are keyed with the pack (see TryGetForPath).
+            { KingdomKey + "SM_Env_Rock_Cliff_01", M(-4.55f, -4.75f, -4.88f, 4.55f, 13.72f, 4.88f, 128f, -4.34f, -4.73f, -4.72f, -4.72f, E, -4.20f, -4.63f, -4.75f, -4.74f, -3.64f, -3.03f, -4.20f, -3.91f, -3.06f, -3.18f, -2.90f, -3.61f, -3.35f, -3.31f, -2.63f, -2.52f, -3.22f, -3.16f, -3.15f, 2.76f) },
+            { KingdomKey + "SM_Env_Rock_Cliff_02", M(-5.73f, -3.38f, -6.20f, 5.77f, 17.17f, 6.20f, 94f, -2.63f, -2.92f, -2.83f, -2.56f, -1.69f, -3.00f, -3.24f, -3.38f, -2.84f, -2.13f, -3.02f, -3.10f, -3.29f, -2.86f, -2.56f, -2.33f, -2.22f, -2.81f, -2.77f, -2.54f, -1.32f, -1.83f, -2.23f, -2.31f, -2.12f) },
+            { KingdomKey + "SM_Env_Rock_Cliff_03", M(-5.39f, -3.14f, -5.34f, 4.55f, 10.64f, 3.61f, -169f, E, -2.23f, -2.81f, -2.72f, E, -1.26f, -3.03f, -3.08f, -2.74f, -2.11f, -2.03f, -3.08f, -3.13f, -2.88f, -2.56f, -2.21f, -2.90f, -2.92f, -3.03f, -2.96f, -1.99f, -2.77f, -3.03f, -3.14f, -2.98f) },
+            { KingdomKey + "SM_Env_Rock_Cliff_04", M(-7.98f, -2.85f, -10.06f, 8.64f, 6.86f, 10.27f, -90f, -0.40f, -0.38f, -2.33f, -2.48f, 2.58f, -1.23f, -1.11f, -2.41f, -2.85f, -2.82f, -2.79f, -2.34f, -1.22f, -2.16f, -2.40f, -2.14f, -2.07f, -1.18f, -1.40f, -1.23f, -1.42f, -1.77f, -1.03f, -1.49f, -1.29f) },
+            { KingdomKey + "SM_Env_Rock_Cliff_05", M(-4.15f, -0.52f, -3.21f, 2.18f, 5.42f, 3.21f, 38f, 0.54f, 0.04f, -0.02f, 0.17f, 0.70f, -0.21f, -0.48f, -0.46f, -0.42f, 0.05f, -0.12f, -0.52f, -0.48f, -0.47f, -0.44f, E, -0.46f, -0.48f, -0.47f, -0.42f, E, 0.17f, -0.39f, -0.36f, -0.33f) },
+            { KingdomKey + "SM_Env_Rock_Chunk_01", M(-0.83f, -0.70f, -0.92f, 0.83f, 0.57f, 0.96f, -46f, -0.42f, -0.45f, -0.47f, -0.48f, -0.45f, -0.58f, -0.61f, -0.64f, -0.64f, -0.51f, -0.59f, -0.65f, -0.69f, -0.68f, -0.52f, -0.58f, -0.65f, -0.70f, -0.67f, -0.52f, -0.57f, -0.62f, -0.61f, -0.54f, -0.17f) },
+            { KingdomKey + "SM_Env_Rock_Chunk_02", M(-1.36f, -0.99f, -1.65f, 1.36f, 0.99f, 1.65f, 90f, -0.34f, -0.39f, -0.59f, -0.36f, E, -0.48f, -0.99f, -0.99f, -0.99f, -0.66f, -0.47f, -0.99f, -0.99f, -0.97f, -0.89f, -0.33f, -0.94f, -0.91f, -0.90f, -0.37f, 0.33f, -0.26f, -0.51f, -0.17f, -0.08f) },
+            { KingdomKey + "SM_Env_Rock_Chunk_03", M(-1.85f, -1.55f, -1.66f, 1.85f, 1.55f, 1.66f, 119f, -1.33f, -1.32f, -1.29f, -1.29f, 0.03f, -1.35f, -1.50f, -1.32f, -1.26f, -0.86f, -1.48f, -1.55f, -1.33f, -1.09f, -0.77f, -0.95f, -1.00f, -1.04f, -1.02f, -0.33f, E, 0.18f, -0.46f, -0.33f, -0.17f) },
         };
+
+        /// <summary>Key prefix of the Fantasy Kingdom prefabs in the table (their names repeat the Meadow ones).</summary>
+        public const string KingdomKey = "PolygonFantasyKingdom/";
 
         /// <summary>Metrics measured offline for the prefab called <paramref name="prefabName"/> (file name without extension).</summary>
         public static bool TryGet(string prefabName, out PropMetrics metrics)
@@ -87,6 +100,7 @@ namespace MedievalZen.World
             int slash = assetPath.LastIndexOf('/');
             int dot = assetPath.LastIndexOf('.');
             string name = assetPath.Substring(slash + 1, (dot > slash ? dot : assetPath.Length) - slash - 1);
+            if (assetPath.Contains("/PolygonFantasyKingdom/")) return TryGet(KingdomKey + name, out metrics);
             return TryGet(name, out metrics);
         }
 

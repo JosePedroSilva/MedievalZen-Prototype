@@ -71,13 +71,13 @@ namespace MedievalZen.Endless.Generation
                 case RegionKind.HighlandPass:
                 {
                     list.Add(Make(PlaceKind.Pass, index, r.Col, 0, 0.0, SettlementNamesPass(index)));
-                    // Camp two-thirds of the way up the near side.
-                    double camp = r.Start + (r.Col - r.Start) * 0.66;
+                    // Camp two-thirds of the way up the near side, on the climb's shelf nearest to that (a level rest).
+                    double camp = OnShelf(r.Start + (r.Col - r.Start) * 0.66, r.Start - ElevationProfile.ClimbLead, r.Col - JourneyPlan.InnFlat - 60.0, avoid);
                     int campSide = Side(index, 601);
-                    if (Clear(camp, avoid, 150.0)) list.Add(Make(PlaceKind.Camp, index * 4 + 1, camp, campSide, 18.5, null));
-                    // Viewpoint on the far side, 40 % of the way down, looking back down the valley.
-                    double view = r.Col + (r.End - r.Col) * 0.4;
-                    if (Clear(view, avoid, 200.0))
+                    if (Clear(camp, avoid, 150.0) && ClearOfStreams(camp)) list.Add(Make(PlaceKind.Camp, index * 4 + 1, camp, campSide, 18.5, null));
+                    // Viewpoint on the far side, 40 % of the way down, looking back down the valley (on a shelf).
+                    double view = OnShelf(r.Col + (r.End - r.Col) * 0.4, r.Col + JourneyPlan.InnFlat + 60.0, r.End, avoid);
+                    if (Clear(view, avoid, 200.0) && ClearOfStreams(view))
                     {
                         FeaturePlace vp = Make(PlaceKind.Viewpoint, index * 4 + 2, view, OpenSide(view), 22.0, MedievalZen.World.SettlementNames.ViewpointAt(p.seed, index));
                         Facing(vp, 1.0, 0.6);
@@ -93,7 +93,7 @@ namespace MedievalZen.Endless.Generation
                     for (double s = r.Start + r.Length * 0.25; s <= r.End - r.Length * 0.25; s += 50.0)
                     {
                         double h = profile.Height(s) + 0.5 * EndlessNoise.Unit(p.seed, 602, index, (long)s);
-                        if (h > bestH && Clear(s, avoid, 250.0))
+                        if (h > bestH && Clear(s, avoid, 250.0) && ClearOfStreams(s))
                         {
                             bestH = h;
                             best = s;
@@ -119,7 +119,7 @@ namespace MedievalZen.Endless.Generation
                         for (int attempt = 0; attempt < 8; attempt++)
                         {
                             double s = r.Start + r.Length * (0.2 + 0.6 * EndlessNoise.Unit(p.seed, 604, index, attempt));
-                            if (!Clear(s, avoid, 250.0)) continue;
+                            if (!Clear(s, avoid, 250.0) || !ClearOfStreams(s)) continue;
                             int side = Side(index * 8 + attempt, 605);
                             foreach (Place lake in avoid)
                             {
@@ -137,6 +137,39 @@ namespace MedievalZen.Endless.Generation
 
             list.Sort((a, b) => a.Place.S.CompareTo(b.Place.S));
             return list.ToArray();
+        }
+
+        /// <summary>The middle of the shelf in [lo, hi] nearest to <paramref name="s"/> (within 260 m), else <paramref name="s"/>.</summary>
+        private double OnShelf(double s, double lo, double hi, List<Place> avoid)
+        {
+            var shelves = new List<FlatZone>();
+            profile.Shelves(lo, hi, shelves);
+            double best = s, bestD = 260.0;
+            foreach (FlatZone z in shelves)
+            {
+                double mid = (z.From + z.To) * 0.5;
+                if (Math.Abs(mid - s) < bestD && Clear(mid, avoid, 150.0))
+                {
+                    bestD = Math.Abs(mid - s);
+                    best = Math.Round(mid, 1);
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>False within 120 m of a stream crossing.</summary>
+        private bool ClearOfStreams(double s)
+        {
+            StreamNetwork net = field.Streams;
+            if (net == null) return true;
+            for (long k = StreamPlan.CellOf(s) - 1; k <= StreamPlan.CellOf(s) + 1; k++)
+            {
+                Crossing c = net.Plan.Cell(k);
+                if (c != null && Math.Abs(c.S - s) < 120.0 && net.Accepted(c)) return false;
+            }
+
+            return true;
         }
 
         private string SettlementNamesPass(long index) => MedievalZen.World.SettlementNames.PassAt(p.seed, index);
@@ -164,8 +197,8 @@ namespace MedievalZen.Endless.Generation
             double right = 0.0, left = 0.0;
             foreach (double d in new[] { 60.0, 90.0 })
             {
-                right += field.Height(x + nx * d, z + nz * d);
-                left += field.Height(x - nx * d, z - nz * d);
+                right += field.PlanHeight(x + nx * d, z + nz * d);
+                left += field.PlanHeight(x - nx * d, z - nz * d);
             }
 
             return right <= left ? 1 : -1;

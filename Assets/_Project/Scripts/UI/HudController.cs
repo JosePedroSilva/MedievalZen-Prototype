@@ -38,6 +38,9 @@ namespace MedievalZen.UI
         [SerializeField, Min(0.05f), Tooltip("Seconds a toast takes to fade in or out.")]
         private float toastFadeSeconds = 0.6f;
 
+        [SerializeField, Min(0.3f), Tooltip("Seconds the walking-pace notice (a toast replaced in place while the pace is stepped) stays fully visible.")]
+        private float paceSeconds = 1.6f;
+
         [SerializeField, Min(0.05f), Tooltip("Seconds the HUD and prompt take to fade in or out.")]
         private float panelFadeSeconds = 0.35f;
 
@@ -75,11 +78,17 @@ namespace MedievalZen.UI
         private string currentToast;
         private float toastTimer;
         private int toastPhase;          // 0 idle, 1 fade in, 2 hold, 3 fade out
+        private bool paceShowing;        // the toast on screen is the walking-pace notice (updated in place)
+        private string pendingPace;      // a pace notice waiting for the toast slot
+        private PlayerController paceSource;
         private bool promptVisible;
         private bool menuVisible;
         private string[] menuLines;
         private int lastMinute = -1;
         private int lastDay = -1;
+        private int lastSeasonKey = -1;
+        private string lastSeasonName;
+        private float lastSeasonYear = float.NaN;
         private bool lastTravelling;
         private CameraMode lastMode;
         private bool chipsDirty = true;
@@ -142,6 +151,31 @@ namespace MedievalZen.UI
             if (toastPhase != 0 && message == currentToast) return;
             if (toasts.Count > 0 && message == LastQueued()) return;
             toasts.Enqueue(message);
+        }
+
+        /// <summary>
+        /// Shows the walking pace (e.g. "Stroll · 1.1 m/s") in the toast for about two seconds. Stepping again while it shows
+        /// replaces the text in place and restarts its time instead of queueing; it goes ahead of queued toasts, and a toast
+        /// already on screen is shortened as for any queued message.
+        /// </summary>
+        public void ShowPace(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return;
+            if (toastPhase != 0 && paceShowing)
+            {
+                currentToast = message;
+                if (toastText != null) toastText.text = message;
+                if (toastPhase == 2) toastTimer = 0f;
+                else if (toastPhase == 3) toastPhase = 1;
+                return;
+            }
+
+            pendingPace = message;
+        }
+
+        private void OnPaceChanged(float pace, float metresPerSecond)
+        {
+            ShowPace(WalkPace.Label(pace, metresPerSecond));
         }
 
         /// <summary>Shows the contextual prompt at the bottom of the screen (e.g. "E — Read signpost").</summary>
@@ -260,6 +294,10 @@ namespace MedievalZen.UI
                 travel.Notice += ShowToast;
                 travel.DestinationChanged += OnDestinationChanged;
             }
+
+            paceSource = travel != null ? travel.GetComponent<PlayerController>() : null;
+            if (paceSource == null) paceSource = FindFirstObjectByType<PlayerController>();
+            if (paceSource != null) paceSource.PaceChanged += OnPaceChanged;
         }
 
         private void OnDestroy()
@@ -270,6 +308,7 @@ namespace MedievalZen.UI
                 travel.DestinationChanged -= OnDestinationChanged;
             }
 
+            if (paceSource != null) paceSource.PaceChanged -= OnPaceChanged;
             if (Instance == this) Instance = null;
         }
 
@@ -281,8 +320,11 @@ namespace MedievalZen.UI
             nextDistanceRefresh = 0f;
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("HudController");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             float dt = Time.unscaledDeltaTime;
             float step = dt / panelFadeSeconds;
             bool hudVisible = HudVisible;
@@ -338,10 +380,24 @@ namespace MedievalZen.UI
                 timeText.text = $"{minute / 60:00}:{minute % 60:00}";
             }
 
-            if (cycle.Day != lastDay)
+            // The season in words beside the day, unless it is the fixed autumn the game always had; a one-off notice when its
+            // name moves on under Auto ("Early spring"), but not when the year jumps (a new choice, a journey resumed).
+            int seasonKey = Season.Revision * 4 + (int)Season.Choice;
+            if (cycle.Day != lastDay || seasonKey != lastSeasonKey)
             {
                 lastDay = cycle.Day;
-                dayText.text = $"Day {cycle.Day}";
+                lastSeasonKey = seasonKey;
+                float year = Season.Year;
+                string season = Season.Choice == SeasonChoice.Autumn ? null : Season.Name(year);
+                if (season != null && lastSeasonName != null && season != lastSeasonName && Season.Choice == SeasonChoice.Auto &&
+                    !float.IsNaN(lastSeasonYear) && Season.Distance(year, lastSeasonYear) < 0.1f)
+                {
+                    ShowToast(season);
+                }
+
+                lastSeasonName = season;
+                lastSeasonYear = year;
+                dayText.text = season == null ? $"Day {cycle.Day}" : $"Day {cycle.Day}   ·   {season}";
             }
         }
 
@@ -427,14 +483,28 @@ namespace MedievalZen.UI
             switch (toastPhase)
             {
                 case 0:
-                    if (toasts.Count == 0) return;
-                    currentToast = toasts.Dequeue();
+                    if (pendingPace != null)
+                    {
+                        // The walking pace answers the player's own wheel: it goes ahead of queued toasts.
+                        currentToast = pendingPace;
+                        pendingPace = null;
+                        paceShowing = true;
+                    }
+                    else
+                    {
+                        if (toasts.Count == 0) return;
+                        currentToast = toasts.Dequeue();
+                        paceShowing = false;
+                    }
+
                     toastText.text = currentToast;
                     toastPhase = 1;
                     toastTimer = 0f;
                     break;
                 case 1:
-                    toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, 1f, dt / toastFadeSeconds);
+                    // The pace notice fades in quickly so the wheel feels answered.
+                    float fadeIn = paceShowing ? Mathf.Min(toastFadeSeconds, 0.2f) : toastFadeSeconds;
+                    toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, 1f, dt / fadeIn);
                     if (toastGroup.alpha >= 1f)
                     {
                         toastPhase = 2;
@@ -444,7 +514,9 @@ namespace MedievalZen.UI
                     break;
                 case 2:
                     toastTimer += dt;
-                    if (toastTimer >= toastSeconds || (toasts.Count > 0 && toastTimer >= toastSeconds * 0.5f)) toastPhase = 3;
+                    float hold = paceShowing ? paceSeconds : toastSeconds;
+                    bool waiting = toasts.Count > 0 || pendingPace != null;
+                    if (toastTimer >= hold || (waiting && toastTimer >= hold * 0.5f)) toastPhase = 3;
                     break;
                 default:
                     toastGroup.alpha = Mathf.MoveTowards(toastGroup.alpha, 0f, dt / toastFadeSeconds);

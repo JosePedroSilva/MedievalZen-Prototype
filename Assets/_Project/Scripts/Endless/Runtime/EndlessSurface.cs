@@ -37,7 +37,14 @@ namespace MedievalZen.Endless
         public float WaterHeight(Vector3 scenePosition)
         {
             (double x, double z) = world.Origin.ToAbsolute(scenePosition);
-            return world.WaterHeightAbsolute(x, z);
+            float lake = world.WaterHeightAbsolute(x, z);
+            if (lake >= 0f) return lake;
+
+            // Streams: from the ribbons of the built tile there (what is drawn); a tile without streams has none.
+            float ts = world.Params.tileSize;
+            TileCoord c = TileCoord.Containing(x, z, ts);
+            if (!StreamWaterIndex.Knows(c)) return lake;
+            return StreamWaterIndex.Surface(c, (float)(x - c.OriginX(ts)), (float)(z - c.OriginZ(ts)), world.GroundHeightAbsolute(x, z));
         }
 
         public ITreeDensity CreateTreeDensity(float cellSize) => new Density(world);

@@ -1,0 +1,570 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 71528d964c0d3c94f93421161c03381a, type: 3}
+  m_Name: AmbiencePalette
+  m_EditorClassIdentifier: MedievalZen::MedievalZen.Sound.AmbiencePalette
+  version: 2
+  entries:
+  - role: 0
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Seasons/Summer.wav
+    clip: {fileID: 8300000, guid: 8b7552b109ee0664580c57767f4eca17, type: 3}
+    rmsDb: -37.24826
+    peakDb: -20.915503
+    windowMinDb: -38.732624
+    windowMaxDb: -35.901833
+    seamLevelDb: -0.7114296
+    seamJump: 0.0036621094
+    trimDb: 7.2482605
+    userTrimDb: 0
+    enabled: 1
+  - role: 0
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Seasons/Spring Wind.wav
+    clip: {fileID: 8300000, guid: 83c79cd106885fc4a9b6fc8e34bd95e4, type: 3}
+    rmsDb: -30.873526
+    peakDb: -15.922373
+    windowMinDb: -34.203182
+    windowMaxDb: -28.5701
+    seamLevelDb: 0.12749863
+    seamJump: 0.000579834
+    trimDb: 0.8735256
+    userTrimDb: 0
+    enabled: 1
+  - role: 0
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 4/Environmental Ambiences Sound
+      FX Pack Vol. 4/Nature/Grass Rustling.wav
+    clip: {fileID: 8300000, guid: 0b7a55e6a34b05345814c60074545060, type: 3}
+    rmsDb: -29.685495
+    peakDb: -7.302468
+    windowMinDb: -31.46176
+    windowMaxDb: -28.378128
+    seamLevelDb: -0.5279293
+    seamJump: 0
+    trimDb: -0.31450462
+    userTrimDb: 0
+    enabled: 1
+  - role: 1
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/Forest Trees Birds.wav
+    clip: {fileID: 8300000, guid: fd5747ae6a32f9c42b17d93e497bf22e, type: 3}
+    rmsDb: -32.200275
+    peakDb: -15.90085
+    windowMinDb: -33.268
+    windowMaxDb: -29.907307
+    seamLevelDb: -0.16087341
+    seamJump: 0.0009460449
+    trimDb: 2.2002754
+    userTrimDb: 0
+    enabled: 1
+  - role: 2
+    category: 0
+    path: Environments 2/Environments 2/Fairy Forest/Fairy Forest Calm Loop A.wav
+    clip: {fileID: 8300000, guid: 2c1a82b7d87bb974d9e43b643e022c2b, type: 3}
+    rmsDb: -31.20094
+    peakDb: -8.491146
+    windowMinDb: -33.67129
+    windowMaxDb: -25.935429
+    seamLevelDb: 1.6747856
+    seamJump: 0.009338379
+    trimDb: 1.2009392
+    userTrimDb: 0
+    enabled: 1
+  - role: 3
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/Pine Forest.wav
+    clip: {fileID: 8300000, guid: 91e5917659c62424b8091fa64f594ad6, type: 3}
+    rmsDb: -33.538265
+    peakDb: -17.948036
+    windowMinDb: -35.165264
+    windowMaxDb: -31.43439
+    seamLevelDb: -0.50603104
+    seamJump: 0.0009460449
+    trimDb: 3.5382652
+    userTrimDb: 0
+    enabled: 1
+  - role: 4
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/Woods Night.wav
+    clip: {fileID: 8300000, guid: 2c738afcaa439304e8edc2b2eaa1532d, type: 3}
+    rmsDb: -32.90762
+    peakDb: -12.943165
+    windowMinDb: -34.111526
+    windowMaxDb: -30.894445
+    seamLevelDb: -0.28538513
+    seamJump: 0.0013122559
+    trimDb: 2.9076195
+    userTrimDb: 0
+    enabled: 1
+  - role: 5
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/Wind.wav
+    clip: {fileID: 8300000, guid: cce404d0635245549aea526322cbab5c, type: 3}
+    rmsDb: -30.386843
+    peakDb: -11.163559
+    windowMinDb: -39.968636
+    windowMaxDb: -25.953375
+    seamLevelDb: 1.6687851
+    seamJump: 0.0014038086
+    trimDb: 0.38684273
+    userTrimDb: 0
+    enabled: 1
+  - role: 5
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 4/Environmental Ambiences Sound
+      FX Pack Vol. 4/Nature/Windy Place 001.wav
+    clip: {fileID: 8300000, guid: 12032701f6a70fa48b4aeb31e18657b8, type: 3}
+    rmsDb: -18.59617
+    peakDb: -4.698797
+    windowMinDb: -21.785307
+    windowMaxDb: -15.7989855
+    seamLevelDb: 0.6437359
+    seamJump: 0
+    trimDb: -11.40383
+    userTrimDb: 0
+    enabled: 1
+  - role: 5
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 4/Environmental Ambiences Sound
+      FX Pack Vol. 4/Nature/Windy Place 002.wav
+    clip: {fileID: 8300000, guid: 44246838feb97d845899a7c90b618abf, type: 3}
+    rmsDb: -38.035126
+    peakDb: -19.435085
+    windowMinDb: -42.85409
+    windowMaxDb: -33.01627
+    seamLevelDb: -1.2931252
+    seamJump: 0.000030517578
+    trimDb: 8.035126
+    userTrimDb: 0
+    enabled: 1
+  - role: 6
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/Windy Mountain Plains.wav
+    clip: {fileID: 8300000, guid: f869bcfb9c1d5aa459874b6f045c126e, type: 3}
+    rmsDb: -32.876762
+    peakDb: -14.271324
+    windowMinDb: -44.462494
+    windowMaxDb: -27.62559
+    seamLevelDb: 2.260849
+    seamJump: 0.0005187988
+    trimDb: 2.8767624
+    userTrimDb: 0
+    enabled: 1
+  - role: 6
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/Mountain Wind Gusts.wav
+    clip: {fileID: 8300000, guid: 68e4ea9b48c31a443933f281255d015f, type: 3}
+    rmsDb: -28.084705
+    peakDb: -5.248057
+    windowMinDb: -38.073597
+    windowMaxDb: -21.454258
+    seamLevelDb: 1.4202118
+    seamJump: 0.00024414062
+    trimDb: -1.9152946
+    userTrimDb: 0
+    enabled: 1
+  - role: 7
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/Winter Strong Wind.wav
+    clip: {fileID: 8300000, guid: b10f94c35e41e694c9b03bf8e9076cc0, type: 3}
+    rmsDb: -31.385172
+    peakDb: -11.8700695
+    windowMinDb: -35.25126
+    windowMaxDb: -27.456772
+    seamLevelDb: -0.5635452
+    seamJump: 0.0019226074
+    trimDb: 1.3851719
+    userTrimDb: 0
+    enabled: 1
+  - role: 7
+    category: 0
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/Winter Cold Wind.wav
+    clip: {fileID: 8300000, guid: 892f29b3493d33e489f7b03330b89986, type: 3}
+    rmsDb: -27.811638
+    peakDb: -11.209684
+    windowMinDb: -31.778015
+    windowMaxDb: -24.32101
+    seamLevelDb: -0.09241104
+    seamJump: 0.0035095215
+    trimDb: -2.1883621
+    userTrimDb: 0
+    enabled: 1
+  - role: 8
+    category: 0
+    path: Environments 2/Environments 2/Farm/Farm Windy Loop.wav
+    clip: {fileID: 8300000, guid: 94f079cbb5f1f6a439d30facfce14e5f, type: 3}
+    rmsDb: -30.373169
+    peakDb: -9.598803
+    windowMinDb: -31.724947
+    windowMaxDb: -26.378162
+    seamLevelDb: -0.104413986
+    seamJump: 0
+    trimDb: 0.37316895
+    userTrimDb: 0
+    enabled: 1
+  - role: 20
+    category: 1
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/River Close A.wav
+    clip: {fileID: 8300000, guid: 68455ad63dce62b43bb230385414a872, type: 3}
+    rmsDb: -24.293207
+    peakDb: -4.8290763
+    windowMinDb: -25.248505
+    windowMaxDb: -23.352161
+    seamLevelDb: -0.0011615753
+    seamJump: 0.000015258789
+    trimDb: -3.7067928
+    userTrimDb: 0
+    enabled: 1
+  - role: 20
+    category: 1
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/River Close B.wav
+    clip: {fileID: 8300000, guid: 6d1dc772e9e596844b0e4b88b1edd809, type: 3}
+    rmsDb: -24.511711
+    peakDb: -8.0308
+    windowMinDb: -24.983444
+    windowMaxDb: -24.04989
+    seamLevelDb: 0.05313301
+    seamJump: 0.0019073486
+    trimDb: -3.4882889
+    userTrimDb: 0
+    enabled: 1
+  - role: 20
+    category: 1
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/River Close Streaming.wav
+    clip: {fileID: 8300000, guid: d14f79e2761a53d4fb5ec0d0adc34c05, type: 3}
+    rmsDb: -25.420248
+    peakDb: -6.210328
+    windowMinDb: -26.285723
+    windowMaxDb: -24.272549
+    seamLevelDb: 0.97675514
+    seamJump: 0.0008087158
+    trimDb: -2.579752
+    userTrimDb: 0
+    enabled: 1
+  - role: 20
+    category: 1
+    path: Environments 2/Environments 2/Forest Water/Forest Secluded River Loop.wav
+    clip: {fileID: 8300000, guid: f2e6b42fd6f723f4b8acc3f7d679e23b, type: 3}
+    rmsDb: -38.159615
+    peakDb: -20.62585
+    windowMinDb: -38.944633
+    windowMaxDb: -36.688816
+    seamLevelDb: -0.0027618408
+    seamJump: 0.0032958984
+    trimDb: 10.159615
+    userTrimDb: 0
+    enabled: 1
+  - role: 21
+    category: 1
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Seasons/Summer Lake.wav
+    clip: {fileID: 8300000, guid: ea63ee2689e0fd445ab0ba313a678036, type: 3}
+    rmsDb: -35.92409
+    peakDb: -18.812176
+    windowMinDb: -38.318336
+    windowMaxDb: -32.868587
+    seamLevelDb: -0.3614769
+    seamJump: 0.0034179688
+    trimDb: 7.9240913
+    userTrimDb: 0
+    enabled: 1
+  - role: 21
+    category: 1
+    path: Environments 2/Environments 2/Forest Water/Forest Big Pond Loop.wav
+    clip: {fileID: 8300000, guid: 3029638a43e5bb647886d6d5a11560d6, type: 3}
+    rmsDb: -32.784805
+    peakDb: -6.520877
+    windowMinDb: -33.878067
+    windowMaxDb: -31.899042
+    seamLevelDb: -0.3675537
+    seamJump: 0.0004272461
+    trimDb: 4.7848053
+    userTrimDb: 0
+    enabled: 1
+  - role: 21
+    category: 1
+    path: Environments 2/Environments 2/Forest Water/Forest Small Pond Loop.wav
+    clip: {fileID: 8300000, guid: 43f4eaddc11370846afb2ebf78b573aa, type: 3}
+    rmsDb: -33.43606
+    peakDb: -8.599619
+    windowMinDb: -35.59238
+    windowMaxDb: -30.425987
+    seamLevelDb: 0.007587433
+    seamJump: 0.003540039
+    trimDb: 5.436062
+    userTrimDb: 0
+    enabled: 1
+  - role: 22
+    category: 1
+    path: Environments 2/Environments 2/Farm/Farm Animals Loop A.wav
+    clip: {fileID: 8300000, guid: f037967393d020f4c9f9c63e0d9dfe04, type: 3}
+    rmsDb: -30.71656
+    peakDb: -11.916455
+    windowMinDb: -33.023018
+    windowMaxDb: -26.12398
+    seamLevelDb: 0.56663895
+    seamJump: 0.007888794
+    trimDb: -1.2834396
+    userTrimDb: 0
+    enabled: 1
+  - role: 22
+    category: 1
+    path: Environments 2/Environments 2/Farm/Farm Animals Loop B.wav
+    clip: {fileID: 8300000, guid: 3eeb2376cbab6724bb69e9e34f2a8d4c, type: 3}
+    rmsDb: -34.828423
+    peakDb: -9.993423
+    windowMinDb: -39.7404
+    windowMaxDb: -29.916271
+    seamLevelDb: 0.4223385
+    seamJump: 0.00090026855
+    trimDb: 2.8284225
+    userTrimDb: 0
+    enabled: 1
+  - role: 23
+    category: 2
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Public/Busy Market.wav
+    clip: {fileID: 8300000, guid: 6205e4e55da1b234a82d8a5f6f73bd86, type: 3}
+    rmsDb: -26.561169
+    peakDb: -11.673233
+    windowMinDb: -27.760988
+    windowMaxDb: -25.237534
+    seamLevelDb: -0.034584045
+    seamJump: 0.004638672
+    trimDb: -10.438831
+    userTrimDb: 0
+    enabled: 1
+  - role: 24
+    category: 2
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Public/Populated Outdoor Restaurant.wav
+    clip: {fileID: 8300000, guid: 719a4dce6c70a424eab4d0cb1d5699e3, type: 3}
+    rmsDb: -26.539387
+    peakDb: -11.430209
+    windowMinDb: -28.10395
+    windowMaxDb: -24.899057
+    seamLevelDb: -0.014032364
+    seamJump: 0.003479004
+    trimDb: -10.460613
+    userTrimDb: 0
+    enabled: 1
+  - role: 25
+    category: 1
+    path: Environments 2/Environments 2/Farm/Farm Windmill Loop.wav
+    clip: {fileID: 8300000, guid: 6c754569d12434e48b72b8e34761e87e, type: 3}
+    rmsDb: -33.74419
+    peakDb: -14.613088
+    windowMinDb: -41.429527
+    windowMaxDb: -28.21562
+    seamLevelDb: -0.63204956
+    seamJump: 0
+    trimDb: 3.7441902
+    userTrimDb: 0
+    enabled: 1
+  - role: 26
+    category: 1
+    path: Environmental Ambiences Sound FX Pack Vol. 5/Environmental Ambiences Sound
+      FX Pack Vol. 5/Biome/Windy Church Creaking.wav
+    clip: {fileID: 8300000, guid: 71a73f1a7e7581642adeb3ddde7818ad, type: 3}
+    rmsDb: -25.1392
+    peakDb: -8.163443
+    windowMinDb: -31.599123
+    windowMaxDb: -20.03603
+    seamLevelDb: 1.3349094
+    seamJump: 0.00021362305
+    trimDb: -8.8608
+    userTrimDb: 0
+    enabled: 1
+  - role: 27
+    category: 1
+    path: Environmental Ambiences Sound FX Pack Vol. 4/Environmental Ambiences Sound
+      FX Pack Vol. 4/Fantasy/Sacred Place 001.wav
+    clip: {fileID: 8300000, guid: acd211b4946d3f94dbc6100acf95abb7, type: 3}
+    rmsDb: -27.509735
+    peakDb: -13.586949
+    windowMinDb: -30.122755
+    windowMaxDb: -25.603601
+    seamLevelDb: 0.75019073
+    seamJump: 0
+    trimDb: -10.490265
+    userTrimDb: 0
+    enabled: 1
+  - role: 40
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds General/Birds Group A.wav
+    clip: {fileID: 8300000, guid: 067b108cf80af094e9e598e2f3c4f999, type: 3}
+    rmsDb: -31.055319
+    peakDb: -16.3679
+    windowMinDb: -41.906246
+    windowMaxDb: -31.055319
+    seamLevelDb: -14.803658
+    seamJump: 0
+    trimDb: 0.055318832
+    userTrimDb: 0
+    enabled: 1
+  - role: 40
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds General/Birds Group B.wav
+    clip: {fileID: 8300000, guid: 3f6395dd41d6ab942b7fe166f4140025, type: 3}
+    rmsDb: -33.721992
+    peakDb: -18.545807
+    windowMinDb: -38.914948
+    windowMaxDb: -33.721992
+    seamLevelDb: -19.13889
+    seamJump: 0
+    trimDb: 2.7219925
+    userTrimDb: 0
+    enabled: 1
+  - role: 40
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds General/Birds Group C.wav
+    clip: {fileID: 8300000, guid: 8d74d93b970aea740bbae87ad4cb7f09, type: 3}
+    rmsDb: -30.69079
+    peakDb: -15.468644
+    windowMinDb: -84.54169
+    windowMaxDb: -30.69079
+    seamLevelDb: -83.24141
+    seamJump: 0
+    trimDb: -0.30920982
+    userTrimDb: 0
+    enabled: 1
+  - role: 40
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds General/Birds Group D.wav
+    clip: {fileID: 8300000, guid: 8e38a5863f1b235458fa4c1549b469cc, type: 3}
+    rmsDb: -29.362291
+    peakDb: -15.528634
+    windowMinDb: -32.077625
+    windowMaxDb: -29.362291
+    seamLevelDb: -53.250942
+    seamJump: 0
+    trimDb: -1.6377087
+    userTrimDb: 0
+    enabled: 1
+  - role: 40
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds General/Birds Group E.wav
+    clip: {fileID: 8300000, guid: 77ee50a51e77f8441a9c284c15abdd32, type: 3}
+    rmsDb: -24.688837
+    peakDb: -8.823644
+    windowMinDb: -36.651054
+    windowMaxDb: -24.688837
+    seamLevelDb: -55.57353
+    seamJump: 0
+    trimDb: -6.311163
+    userTrimDb: 0
+    enabled: 1
+  - role: 40
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds General/Birds Group F.wav
+    clip: {fileID: 8300000, guid: 5119928389bcd344cb052829700eb881, type: 3}
+    rmsDb: -27.170591
+    peakDb: -13.396497
+    windowMinDb: -69.42949
+    windowMaxDb: -27.170591
+    seamLevelDb: -65.90437
+    seamJump: 0
+    trimDb: -3.8294086
+    userTrimDb: 0
+    enabled: 1
+  - role: 40
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds General/Birds Group G.wav
+    clip: {fileID: 8300000, guid: 1a59c1a7188d21a41a1fc44e52c6bb7c, type: 3}
+    rmsDb: -33.950207
+    peakDb: -17.773981
+    windowMinDb: -60.34252
+    windowMaxDb: -33.950207
+    seamLevelDb: -50.245136
+    seamJump: 0
+    trimDb: 2.9502068
+    userTrimDb: 0
+    enabled: 1
+  - role: 40
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds General/Birds Group H.wav
+    clip: {fileID: 8300000, guid: 2bfafd5b0e804804897a4a7d0ff00537, type: 3}
+    rmsDb: -33.52306
+    peakDb: -18.333189
+    windowMinDb: -46.932793
+    windowMaxDb: -33.52306
+    seamLevelDb: -38.34769
+    seamJump: 0
+    trimDb: 2.5230598
+    userTrimDb: 0
+    enabled: 1
+  - role: 41
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds Single/Pigeon.wav
+    clip: {fileID: 8300000, guid: 51f064ccde62f9044a25aae4be4e75ae, type: 3}
+    rmsDb: -18.599941
+    peakDb: -2.3356185
+    windowMinDb: -18.599941
+    windowMaxDb: -18.599941
+    seamLevelDb: -4.457697
+    seamJump: 0
+    trimDb: -15.400059
+    userTrimDb: 0
+    enabled: 1
+  - role: 42
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds Single/Seagull Call A.wav
+    clip: {fileID: 8300000, guid: edd5efa423b610c4d9af14f647a02c18, type: 3}
+    rmsDb: -28.106453
+    peakDb: -9.411543
+    windowMinDb: -28.106453
+    windowMaxDb: -28.106453
+    seamLevelDb: -6.1477222
+    seamJump: 0
+    trimDb: -7.893547
+    userTrimDb: 0
+    enabled: 1
+  - role: 42
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds Single/Seagull Call B.wav
+    clip: {fileID: 8300000, guid: e1a833ea25b12184d9e6485516360db1, type: 3}
+    rmsDb: -25.620121
+    peakDb: -8.677012
+    windowMinDb: -25.620121
+    windowMaxDb: -25.620121
+    seamLevelDb: -13.701433
+    seamJump: 0
+    trimDb: -10.379879
+    userTrimDb: 0
+    enabled: 1
+  - role: 42
+    category: 3
+    path: Animals Sound FX Pack/Non Loops/Birds Single/Seagull Call C.wav
+    clip: {fileID: 8300000, guid: 9057833cfd3ec8c429cbb62b019e3cf9, type: 3}
+    rmsDb: -27.85043
+    peakDb: -11.736474
+    windowMinDb: -27.85043
+    windowMaxDb: -27.85043
+    seamLevelDb: -12.843374
+    seamJump: 0
+    trimDb: -8.14957
+    userTrimDb: 0
+    enabled: 1

@@ -36,6 +36,7 @@ namespace MedievalZen.Endless
         private void UpdateHold()
         {
             if (traveller == null) return;
+            UpdatePropWarm();
             if (startup)
             {
                 if (StartReady()) FinishStart();
@@ -60,6 +61,7 @@ namespace MedievalZen.Endless
             else if (ready && frozenByStream)
             {
                 frozenByStream = false;
+                EndPropWarm();
                 SettleOnGround();
                 ApplyFreeze();
                 if (hud != null && holdFaded) hud.Fade(0f, HoldFadeInSeconds);
@@ -68,7 +70,7 @@ namespace MedievalZen.Endless
         }
 
         /// <summary>Near tiles all built, far tiles within the start radius built (or the timeout passed), and the road window ready.</summary>
-        private bool StartReady() => window != null && AreaReady(startupBegan);
+        private bool StartReady() => window != null && AreaReady(startupBegan) && !HoldForWarmup();
 
         /// <summary>
         /// Every wanted near tile is built (a long safety timeout aside), and every far tile within
@@ -83,7 +85,7 @@ namespace MedievalZen.Endless
             {
                 if (states.TryGetValue(w.Coord, out CoordState s) && s.Active != null && s.Active.Lod == w.Lod) continue;
                 if (w.Lod == TileLod.Near && waited <= startTimeout * 4f) return false;   // all near tiles, unless something is badly stuck
-                if (w.Lod == TileLod.Far && w.Distance <= startFarRadius && !timedOut) return false;
+                if (w.Lod != TileLod.Near && w.Distance <= startFarRadius && !timedOut) return false;
             }
 
             return GroundReadyAt(traveller.position);   // never released over missing ground
@@ -91,6 +93,7 @@ namespace MedievalZen.Endless
 
         private void FinishStart()
         {
+            EndPropWarm();
             startup = false;
             frozenByScript = false;
             PlaceTravellerAt(travellerS, startFacing);
@@ -134,6 +137,124 @@ namespace MedievalZen.Endless
             Physics.SyncTransforms();
         }
 
+        // ------------------------------------------------------------------ heavy prop warm-up (third performance pass, 2026-10-06)
+
+        private const float WarmStageDistance = 45f;
+        private bool warmWasBlack;
+        private float warmReadySince = -1f;
+        private float warmPassMs;
+        private float warmPassWorstMs;
+        private int warmPassFrames;
+        private float nextPlaceCheck;
+        private double nearestPlaceRoad = double.PositiveInfinity;
+        private readonly System.Collections.Generic.List<Waypoint> placeScratch = new System.Collections.Generic.List<Waypoint>();
+        private readonly System.Diagnostics.Stopwatch stockClock = new System.Diagnostics.Stopwatch();
+
+        /// <summary>
+        /// Once per frame (from <see cref="UpdateHold"/>): behind a hold's black screen, warm the heavy props a few per frame in front
+        /// of the camera; otherwise keep one idle instance of each in the pool, one instantiate per frame at most, never while tiles
+        /// stream and never within <see cref="PropWarmup.StockClearance"/> of a place.
+        /// </summary>
+        private void UpdatePropWarm()
+        {
+            if (builder == null) return;
+            bool holding = startup || frozenByScript || frozenByStream;
+            bool black = holding && IsBlack();
+            if (black && !warmWasBlack)
+            {
+                builder.BeginWarmup();
+                warmPassMs = 0f;
+                warmPassWorstMs = 0f;
+                warmPassFrames = 0;
+            }
+
+            warmWasBlack = black;
+            if (black)
+            {
+                if (!builder.WarmPending && !arrivalWarmup.Pending) return;
+                Camera cam = Camera.main;
+                Vector3 at = cam != null
+                    ? cam.transform.position + cam.transform.forward * WarmStageDistance + Vector3.down * 4f
+                    : traveller.position + Vector3.down * 2000f;   // no camera: still awake and cook, out of sight
+                if (arrivalWarmup.Pending)
+                {
+                    using (Review.FrameCost.Measure(CostArrivalWarm)) arrivalWarmup.Step(this, at);
+                }
+
+                if (!builder.WarmPending) return;
+                float ms = builder.WarmStep(at, Quaternion.identity);
+                warmPassMs += ms;
+                warmPassWorstMs = Mathf.Max(warmPassWorstMs, ms);
+                warmPassFrames++;
+                if (!builder.WarmPending) LogPropWarm("done");
+                return;
+            }
+
+            EndPropWarm();
+            if (Time.unscaledTime >= nextPlaceCheck)
+            {
+                nextPlaceCheck = Time.unscaledTime + 1f;
+                nearestPlaceRoad = NearestPlaceRoadDistance();
+            }
+
+            bool busy = building.Count > 0 || releasing.Count > 0 || scripted;
+            if (!PropWarmup.ShouldStock(builder.AnyHeavyPoolEmpty, busy, nearestPlaceRoad)) return;
+            stockClock.Restart();
+            if (builder.StockOne()) NoteSlice((float)stockClock.Elapsed.TotalMilliseconds, "stock heavy prop");
+        }
+
+        // The arrival warm-up (2026-10-09): effects, people, animals, clips and glyphs a place needs the first time, made behind the
+        // first black hold (ArrivalWarmup).
+        private readonly ArrivalWarmup arrivalWarmup = new ArrivalWarmup();
+        private static readonly int CostArrivalWarm = Review.FrameCost.Register("EndlessWorld.ArrivalWarmup (hold)");
+
+        /// <summary>True while a hold should wait (at most a second after the ground is ready) for the warm-up to finish.</summary>
+        private bool HoldForWarmup()
+        {
+            bool pending = (builder != null && builder.WarmPending) || arrivalWarmup.Pending;
+            if (!pending)
+            {
+                warmReadySince = -1f;
+                return false;
+            }
+
+            if (warmReadySince < 0f) warmReadySince = Time.unscaledTime;
+            return PropWarmup.HoldsForWarmup(true, IsBlack(), Time.unscaledTime - warmReadySince);
+        }
+
+        /// <summary>Ends a warm-up pass as its hold ends: staged props go to the pool now (never seen once the fade lifts).</summary>
+        private void EndPropWarm()
+        {
+            warmReadySince = -1f;
+            arrivalWarmup.EndHold();
+            if (builder == null || !builder.WarmPending) return;
+            builder.EndWarmup();
+            LogPropWarm("cut short by the end of the hold");
+        }
+
+        private void LogPropWarm(string how)
+        {
+            Debug.Log($"Endless road prop warm-up {how}: {warmPassMs:0.0} ms over {warmPassFrames} frames (worst {warmPassWorstMs:0.0} ms); " +
+                      $"heavy prefabs warmed {builder.HeavyPrefabsWarmed}/{builder.HeavyPrefabCount}, made ahead {builder.HeavyStockMade}, idle {builder.HeavyStockIdle}.", this);
+        }
+
+        /// <summary>Road distance from the traveller to the nearest settlement or landmark within the stock clearance (infinity: none).</summary>
+        private double NearestPlaceRoadDistance()
+        {
+            if (generator == null) return double.PositiveInfinity;
+            placeScratch.Clear();
+            generator.Waypoints(travellerS - PropWarmup.StockClearance, travellerS + PropWarmup.StockClearance, placeScratch);
+            double best = double.PositiveInfinity;
+            foreach (Waypoint w in placeScratch)
+            {
+                if (w == null || !(w.IsSettlement || w.Kind == WaypointKind.Landmark)) continue;
+                best = Math.Min(best, Math.Abs(w.S - travellerS));
+            }
+
+            placeScratch.Clear();
+            return best;
+        }
+
         // ------------------------------------------------------------------ Go now
 
         /// <summary>
@@ -143,11 +264,26 @@ namespace MedievalZen.Endless
         public bool TravelTo(Waypoint inn, Action done = null)
         {
             if (inn == null || scripted || startup || generator == null) return false;
-            StartCoroutine(TravelRoutine(inn, done));
+            int direction = inn.S >= travellerS ? 1 : -1;
+            double target = inn.S - direction * (RoadWindow.RadiusFor(inn) + 6.0);
+            StartCoroutine(TravelRoutine(target, direction, $"The road brings you to {inn.Name}", true, done));
             return true;
         }
 
-        private IEnumerator TravelRoutine(Waypoint inn, Action done)
+        /// <summary>
+        /// Takes the traveller to road distance <paramref name="s"/>, facing along the road in <paramref name="direction"/> (+1 ahead,
+        /// −1 back), by the same routine as Go now (behind a fade unless <paramref name="fade"/> is false; the near tiles and the
+        /// distant ones within the start radius are built before it lifts), then calls <paramref name="done"/>. No toast. False
+        /// when busy (used by the review capture tour).
+        /// </summary>
+        public bool TravelToRoadDistance(double s, int direction, bool fade, Action done = null)
+        {
+            if (scripted || startup || generator == null || double.IsNaN(s)) return false;
+            StartCoroutine(TravelRoutine(s, direction >= 0 ? 1 : -1, null, fade, done));
+            return true;
+        }
+
+        private IEnumerator TravelRoutine(double target, int direction, string toast, bool fade, Action done)
         {
             scripted = true;
             if (travel != null) travel.Cancel();
@@ -155,18 +291,20 @@ namespace MedievalZen.Endless
             if (hud != null)
             {
                 hud.HidePrompt();
-                yield return hud.Fade(1f, TravelFadeOutSeconds);
+                if (fade) yield return hud.Fade(1f, TravelFadeOutSeconds);
             }
 
             frozenByScript = true;
             ApplyFreeze();
-            int direction = inn.S >= travellerS ? 1 : -1;
-            double target = inn.S - direction * (RoadWindow.RadiusFor(inn) + 6.0);
+            // The inn finder, the road window and the people read the places round the target: build them on a worker first.
+            yield return WarmWaypointsBefore(target);
             MoveTravellerTo(target, direction);
             float began = Time.unscaledTime;
             yield return new WaitForSecondsRealtime(0.6f);
             // As at the start: the near ground, then the nearer silhouettes (or a timeout), so the view opens complete.
-            while (!AreaReady(began) && Time.unscaledTime - began < 40f) yield return null;
+            // Third performance pass: then up to a second more while the heavy props are warmed behind the black screen.
+            while (!(AreaReady(began) && !HoldForWarmup()) && Time.unscaledTime - began < 40f) yield return null;
+            EndPropWarm();
 
             PlaceTravellerAt(target, direction);
             SettleOnGround();
@@ -180,8 +318,8 @@ namespace MedievalZen.Endless
             scripted = false;
             if (hud != null)
             {
-                hud.ShowToast($"The road brings you to {inn.Name}");
-                yield return hud.Fade(0f, TravelFadeInSeconds);
+                if (toast != null) hud.ShowToast(toast);
+                if (fade || hud.FadeAlpha > 0.001f) yield return hud.Fade(0f, TravelFadeInSeconds);
             }
 
             done?.Invoke();
@@ -261,6 +399,12 @@ namespace MedievalZen.Endless
 
         private int startFacing = +1;
 
+        /// <summary>The loaded journey was saved on horseback (read once by <see cref="MedievalZen.Player.HorseMount"/> when the start hold ends).</summary>
+        public bool ResumeMounted => journey != null && journey.Mounted;
+
+        /// <summary>The saved riding gait (0 walk, 1 trot, 2 canter).</summary>
+        public int ResumeGait => journey != null ? journey.Gait : 0;
+
         private EndlessJourney LoadJourney()
         {
             try
@@ -290,6 +434,14 @@ namespace MedievalZen.Endless
             {
                 journey.Day = cycle.Day;
                 journey.Hour = cycle.Hour;
+            }
+
+            // On horseback or not (only once the mount has picked up a resumed ride, so an early save cannot drop it).
+            MedievalZen.Player.HorseMount mount = MedievalZen.Player.HorseMount.Current;
+            if (mount != null && mount.ResumeChecked)
+            {
+                journey.Mounted = mount.Mounted;
+                journey.Gait = (int)mount.Gait;
             }
 
             journey.Clamp();

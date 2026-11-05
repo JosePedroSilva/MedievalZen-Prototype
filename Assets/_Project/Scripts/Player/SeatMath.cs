@@ -48,6 +48,8 @@ namespace MedievalZen.Player
         {
             if (string.IsNullOrEmpty(name)) return SeatKind.None;
             if (Has(name, "SciFi") || Has(name, "Pile") || Has(name, "Cliff") || Has(name, "Spikey") || Has(name, "Arch") || Has(name, "Crater")) return SeatKind.None;
+            // Fantasy Kingdom yard props that only sound like seats: crate and barrel stacks (2 m tall), the forge's workbench, stalls.
+            if (Has(name, "_Stack") || Has(name, "Workbench") || Has(name, "Market_Stall")) return SeatKind.None;
             if (Has(name, "Camp_Fireplace")) return SeatKind.Fire;
             if (Has(name, "_Log_") || Has(name, "Bench")) return SeatKind.Log;
             if (Has(name, "_Stump_") || Has(name, "Stool")) return SeatKind.Stump;

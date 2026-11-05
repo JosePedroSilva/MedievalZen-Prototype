@@ -16,6 +16,12 @@ namespace MedievalZen.Player
         /// velocity is free to go sideways or backwards; a change of direction rotates the velocity instead of braking through zero.
         /// </summary>
         Strafe,
+
+        /// <summary>
+        /// Riding (<see cref="PlayerMotor.MoveRiding"/>): face-movement with a horse's turn (<see cref="RidingMath"/>): the yaw rate
+        /// falls as the speed rises, and a request far off the facing arcs round at a walk instead of stopping to pivot.
+        /// </summary>
+        Riding,
     }
 
     /// <summary>Tuning of <see cref="MotorMath"/> (the serialized fields of <see cref="PlayerMotor"/>).</summary>

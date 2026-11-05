@@ -39,8 +39,9 @@ namespace MedievalZen.World
         {
             x += offsetX;
             y += offsetY;
-            int xi = Mathf.FloorToInt(x);
-            int yi = Mathf.FloorToInt(y);
+            // Mathf.FloorToInt is (int)Math.Floor(f); written out because the call is not inlined (hot: every texel of every pass).
+            int xi = (int)System.Math.Floor(x);
+            int yi = (int)System.Math.Floor(y);
             float xf = x - xi;
             float yf = y - yi;
             int X = xi & 255;

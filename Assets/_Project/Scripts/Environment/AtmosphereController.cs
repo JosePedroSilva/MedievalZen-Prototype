@@ -15,7 +15,12 @@ namespace MedievalZen.Environment
     /// exponential-squared fog with the same curves. Feeds the <see cref="DayCycle"/> cloud hooks (haze, look) so the
     /// clouds belong to the same atmosphere, and treats the cloud ring as part of the sky layer in the pass (elevation fog
     /// with a haze tail). Also animates the time-of-day grading volume (warm golden hours, neutral noon, cool night, a
-    /// little bloom in mist).
+    /// little bloom in mist), plus the "Rich light" deltas of <see cref="LightLookMath.Grade"/> when <see cref="LightLook"/> is on
+    /// (contrast, saturation, cool-shadow / warm-highlight split toning added to the runtime profile, golden-hour bloom).
+    /// Forest pass (2026-10-05, endless road only, while <see cref="ForestMood.Allowed"/>): keeps <see cref="ForestMood.Canopy"/> from
+    /// the tree density around the camera; under the canopy the haze is deeper (× 1 + <see cref="ForestMood.HazeGain"/> · canopy) and
+    /// a little warmer by day, and the rich grade gains its forest term (<see cref="LightLookMath.AddForest"/>). In the open the canopy
+    /// is 0 and every value is exactly as before; the clouds' haze is computed before the forest term.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-55)]
@@ -187,6 +192,8 @@ namespace MedievalZen.Environment
         private WhiteBalance whiteBalance;
         private Bloom bloom;
         private Vignette vignette;
+        private SplitToning splitToning;
+        private float baseBloomThreshold = 1f;
         private float baseExposure;
         private float baseContrast;
         private float baseSaturation;
@@ -194,6 +201,9 @@ namespace MedievalZen.Environment
         private float baseTemperature;
         private float baseBloom;
         private float baseVignette;
+        private ITreeDensity canopyDensity;
+        private float nextCanopySample;
+        private float canopyTarget;
 
         /// <summary>The active controller (set in Awake).</summary>
         public static AtmosphereController Current { get; private set; }
@@ -254,7 +264,7 @@ namespace MedievalZen.Environment
             ResolveSky();
             ResolveGrading();
             nextPassCheck = 0f;
-            Apply(DayCycle.Current != null ? DayCycle.Current.Hour : 12f, true, Time.deltaTime);
+            Apply(DayCycle.Current != null ? DayCycle.Current.SolarHour : 12f, true, Time.deltaTime);   // the sky's hour (= Hour in spring and autumn)
         }
 
         private void OnDestroy()
@@ -278,9 +288,12 @@ namespace MedievalZen.Environment
             }
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("AtmosphereController");
+
         private void Update()
         {
-            Apply(DayCycle.Current != null ? DayCycle.Current.Hour : 12f, true, Time.deltaTime);
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
+            Apply(DayCycle.Current != null ? DayCycle.Current.SolarHour : 12f, true, Time.deltaTime);   // the sky's hour (= Hour in spring and autumn)
         }
 
         /// <summary>
@@ -299,6 +312,9 @@ namespace MedievalZen.Environment
 
             WeatherPreset weather = WeatherSystem.CurrentWeather;
             FogSettings fog = profile.Evaluate(hour, weather, fogAmount, hazeDistance, baseAltitude, out float scatter, out float patches);
+            FogSettings cloudFog = fog;   // the clouds' haze ignores the forest term
+            float canopy = UpdateCanopy(deltaTime);
+            if (canopy > 0f) fog.hazeDensity *= 1f + ForestMood.HazeGain * canopy;
             Fog = fog;
             MistAmount = patches;
 
@@ -308,6 +324,13 @@ namespace MedievalZen.Environment
             fogColor = new Color(Mathf.Max(fogColor.r, nightFloor.r), Mathf.Max(fogColor.g, nightFloor.g), Mathf.Max(fogColor.b, nightFloor.b), 1f);
             Vector3 lightDir = cycle != null ? cycle.LightDirection : Quaternion.Euler(-40f, 160f, 0f) * Vector3.back;
             float elevation = cycle != null ? cycle.SunElevation : 40f;
+            if (canopy > 0f)
+            {
+                // Warm haze among the trunks by day (sunlight scattered in the green-gold air under the leaves).
+                float warm = 0.5f * canopy * LightLookMath.DayWeight(elevation) * (1f - 0.6f * Mathf.Clamp01(weather.overcast));
+                fogColor = Color.Lerp(fogColor, new Color(fogColor.r * 1.06f, fogColor.g * 1.02f, fogColor.b * 0.86f, 1f), warm);
+            }
+
 
             // In-scattering: the sun colour, dimmed by weather; toward the grey of the sky when overcast.
             Color sunScatter = scatterColor.Evaluate(t) * scatterIntensity;
@@ -327,7 +350,7 @@ namespace MedievalZen.Environment
 
             // Clouds and the sky layer: haze from the aerial haze + mist patches; a longer haze tail above the horizon so low
             // clouds dissolve into it (never past 60°, the zenith stays clear); cloud pixels are found by height and distance.
-            float haze = AtmosphereMath.CloudHaze(fog, patches);
+            float haze = AtmosphereMath.CloudHaze(cloudFog, patches);
             CloudHaze = haze;
             float softness = Mathf.Clamp(cloudSoftness, 0f, 2f);
             float tail = Mathf.Clamp01(skyHorizonFog * softness * (skyTailClear + skyTailHaze * haze));
@@ -392,11 +415,15 @@ namespace MedievalZen.Environment
             golden *= 1f - 0.7f * Mathf.Clamp01(weather.overcast);
             float overcast = Mathf.Clamp01(weather.overcast);
 
+            // "Rich light" (LightLook, Journey menu): deltas on top of the time-of-day grade; all zero / neutral with it off.
+            RichGrade rich = LightLookMath.Grade(LightLook.Weight, elevation, overcast, mist);
+            LightLookMath.AddForest(ref rich, LightLook.Weight, ForestMood.Canopy, elevation, overcast);
+
             if (colorAdjustments != null)
             {
-                colorAdjustments.postExposure.value = baseExposure + night * nightExposureLift;
-                colorAdjustments.contrast.value = baseContrast + golden * contrastGoldenNightMist.x + night * contrastGoldenNightMist.y + mist * contrastGoldenNightMist.z;
-                colorAdjustments.saturation.value = baseSaturation + golden * saturationGoldenNightOvercast.x + night * saturationGoldenNightOvercast.y + overcast * saturationGoldenNightOvercast.z;
+                colorAdjustments.postExposure.value = baseExposure + night * nightExposureLift + rich.Exposure;
+                colorAdjustments.contrast.value = baseContrast + golden * contrastGoldenNightMist.x + night * contrastGoldenNightMist.y + mist * contrastGoldenNightMist.z + rich.Contrast;
+                colorAdjustments.saturation.value = baseSaturation + golden * saturationGoldenNightOvercast.x + night * saturationGoldenNightOvercast.y + overcast * saturationGoldenNightOvercast.z + rich.Saturation;
                 Color filter = Color.Lerp(Color.white, goldenFilter, golden);
                 filter = Color.Lerp(filter, nightFilter, night);
                 colorAdjustments.colorFilter.value = baseFilter * filter;
@@ -404,11 +431,21 @@ namespace MedievalZen.Environment
 
             if (whiteBalance != null)
             {
-                whiteBalance.temperature.value = baseTemperature + golden * temperatureGoldenNight.x + night * temperatureGoldenNight.y;
+                whiteBalance.temperature.value = baseTemperature + golden * temperatureGoldenNight.x + night * temperatureGoldenNight.y + rich.Temperature;
             }
 
-            if (bloom != null) bloom.intensity.value = baseBloom + mist * bloomMistGolden.x + golden * bloomMistGolden.y;
+            if (bloom != null)
+            {
+                bloom.intensity.value = baseBloom + mist * bloomMistGolden.x + golden * bloomMistGolden.y + rich.BloomIntensity;
+                bloom.threshold.value = baseBloomThreshold * rich.BloomThresholdScale;
+            }
+
             if (vignette != null) vignette.intensity.value = baseVignette + night * nightVignette;
+            if (splitToning != null)
+            {
+                splitToning.shadows.value = new Color(rich.Shadows.R, rich.Shadows.G, rich.Shadows.B, 1f);
+                splitToning.highlights.value = new Color(rich.Highlights.R, rich.Highlights.G, rich.Highlights.B, 1f);
+            }
         }
 
         private void ResolveBaseAltitude()
@@ -437,6 +474,32 @@ namespace MedievalZen.Environment
             }
 
             baseAltitude = Mathf.MoveTowards(baseAltitude, targetBaseAltitude, BaseAltitudeFollowSpeed * Mathf.Max(0f, deltaTime));
+        }
+
+        /// <summary>
+        /// Forest pass: samples the tree density around the camera twice a second (endless road, forest extras allowed) and eases
+        /// <see cref="ForestMood.Canopy"/> toward it. Returns the canopy (0 when not allowed: the old look).
+        /// </summary>
+        private float UpdateCanopy(float deltaTime)
+        {
+            GameWorld world = GameWorld.Current;
+            if (!Application.isPlaying || !ForestMood.Allowed || world == null || !world.Surface.IsDynamic)
+            {
+                ForestMood.Canopy = 0f;
+                canopyTarget = 0f;
+                return 0f;
+            }
+
+            if (canopyDensity == null) canopyDensity = world.Surface.CreateTreeDensity(16f);
+            if (Time.time >= nextCanopySample)
+            {
+                nextCanopySample = Time.time + 0.5f;
+                Vector3 eye = ViewPosition();
+                canopyTarget = ForestMood.CanopyFor(ForestMood.MeanDensity(canopyDensity.Sample, eye.x, eye.z));
+            }
+
+            ForestMood.Follow(canopyTarget, deltaTime);
+            return ForestMood.Canopy;
         }
 
         /// <summary>Metres per second the fog base follows the land on the endless road.</summary>
@@ -525,7 +588,9 @@ namespace MedievalZen.Environment
             if (runtime.TryGet(out bloom))
             {
                 baseBloom = bloom.intensity.value;
+                baseBloomThreshold = bloom.threshold.value;
                 bloom.intensity.overrideState = true;
+                bloom.threshold.overrideState = true;
             }
 
             if (runtime.TryGet(out vignette))
@@ -533,6 +598,13 @@ namespace MedievalZen.Environment
                 baseVignette = vignette.intensity.value;
                 vignette.intensity.overrideState = true;
             }
+
+            // Split toning for the rich look's cool shade / warm light, added to the runtime copy only (the profile asset is
+            // not touched). Grey is neutral (soft light with 0.5 is the identity), so the old look is unchanged.
+            if (!runtime.TryGet(out splitToning)) splitToning = runtime.Add<SplitToning>(false);
+            splitToning.shadows.Override(Color.grey);
+            splitToning.highlights.Override(Color.grey);
+            splitToning.balance.Override(0f);
         }
 
         /// <summary>

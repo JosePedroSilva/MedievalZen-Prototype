@@ -1,3 +1,4 @@
+using MedievalZen.Endless;
 using MedievalZen.Player;
 using MedievalZen.Roads;
 using MedievalZen.UI;
@@ -14,6 +15,12 @@ namespace MedievalZen.Travel
     /// live markers. While open the map takes over look input (<see cref="IPlayerInputOverride"/>): look moves a pointer
     /// over the paper, hovering a settlement shows its road distance, click / Interact sets it as the destination and the
     /// route appears dotted. Walking is allowed at half pace; auto-travel and time keep running. <c>M</c> / <c>Esc</c> fold it away.
+    /// <para>
+    /// On the endless road the same hands hold a scroll instead (<see cref="EndlessScrollMap"/>): a taller sheet between two
+    /// wooden rollers showing a strip of country along the road, the direction of travel up, unrolling as the traveller walks.
+    /// The pointer works the same; at the top or bottom edge (or with the wheel / shoulder buttons) it rolls the scroll; picking
+    /// an inn or village sets it as the destination for <c>T</c>.
+    /// </para>
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-45)]
@@ -55,6 +62,16 @@ namespace MedievalZen.Travel
         [SerializeField, Min(0.05f), Tooltip("Seconds to raise or lower the map.")]
         private float animationSeconds = 0.4f;
 
+        [Header("Endless road scroll")]
+        [SerializeField, Tooltip("Scroll position in camera space when held in first person (the scroll is taller than the square sheet).")]
+        private Vector3 scrollHeldPositionFirstPerson = new Vector3(0f, -0.045f, 0.5f);
+
+        [SerializeField, Tooltip("Scroll position in camera space when held in third person.")]
+        private Vector3 scrollHeldPositionThirdPerson = new Vector3(0.06f, -0.04f, 0.52f);
+
+        [SerializeField, Min(0f), Tooltip("Radius of the scroll's wooden rollers in metres.")]
+        private float rollerRadius = 0.0085f;
+
         [Header("Third-person framing while reading")]
         [SerializeField, Min(0.3f)] private float readingDistance = 1.25f;
         [SerializeField] private float readingShoulderOffset = 0.55f;
@@ -86,6 +103,8 @@ namespace MedievalZen.Travel
         private string hoverPrompt;
         private float nextRouteRefresh;
         private bool noMapOfThisRoad;
+        private EndlessScrollMap scroll;
+        private Material rollerMaterial;
 
         /// <summary>True while the map is held up (or rising).</summary>
         public bool IsOpen { get; private set; }
@@ -99,6 +118,9 @@ namespace MedievalZen.Travel
         /// <summary>World position → sheet UV.</summary>
         public Vector2 WorldToMapUV(Vector3 world) => projection.WorldToMapUV(world);
 
+        /// <summary>The endless road's scroll, or null in the finite world.</summary>
+        public EndlessScrollMap Scroll => scroll;
+
         /// <summary>Sheet UV → world position (height 0).</summary>
         public Vector3 MapUVToWorld(Vector2 uv) => projection.MapUVToWorld(uv);
 
@@ -111,10 +133,18 @@ namespace MedievalZen.Travel
             if (controller != null) controller.InputOverride = this;
             if (cameraRig != null) cameraRig.SetFramingOverride(readingDistance, readingShoulderOffset, readingPivotRaise, animationSeconds * 1.5f);
             sheet.gameObject.SetActive(true);
-            pointer = ClampPointer(projection.WorldToMapUV(transform.position));
             hovered = -1;
-            overlay.SetHover(-1, Vector2.zero, null);
-            nextRouteRefresh = 0f;
+            if (scroll != null)
+            {
+                pointer = scroll.Recentre();
+            }
+            else
+            {
+                pointer = ClampPointer(projection.WorldToMapUV(transform.position));
+                overlay.SetHover(-1, Vector2.zero, null);
+                nextRouteRefresh = 0f;
+            }
+
             HudController hud = HudController.Instance;
             if (hud != null) hud.MapMode = true;
             SetPrompt(null);
@@ -140,7 +170,7 @@ namespace MedievalZen.Travel
         {
             if (noMapOfThisRoad)
             {
-                // The endless road has no parchment yet (a strip map is a later phase).
+                // No camera or no road generator: nothing to draw the scroll from.
                 HudController hud = HudController.Instance;
                 if (hud != null) hud.ShowToast("There is no map of this road yet");
                 return;
@@ -156,6 +186,13 @@ namespace MedievalZen.Travel
         public bool OnLook(Vector2 input, bool isPointerDelta)
         {
             Vector2 delta = isPointerDelta ? input * pointerSensitivity : input * (stickPointerSpeed * Time.deltaTime);
+            if (scroll != null)
+            {
+                scroll.MovePointer(delta);
+                pointer = scroll.Pointer;
+                return true;
+            }
+
             pointer = ClampPointer(pointer + delta);
             return true;
         }
@@ -166,7 +203,8 @@ namespace MedievalZen.Travel
         /// <inheritdoc />
         public bool OnInteract()
         {
-            SelectHovered();
+            if (scroll != null) scroll.Select();
+            else SelectHovered();
             return true;
         }
 
@@ -211,14 +249,21 @@ namespace MedievalZen.Travel
 
         private void Start()
         {
-            if (MedievalZen.Endless.EndlessWorld.Current != null)
+            Camera view = cameraRig != null ? cameraRig.Camera : GetComponentInChildren<Camera>();
+            if (EndlessWorld.Current != null)
             {
-                noMapOfThisRoad = true;
+                if (view == null || EndlessWorld.Current.Generator == null)
+                {
+                    noMapOfThisRoad = true;
+                    return;
+                }
+
+                BuildScroll(view.transform);
+                modeBlend = cameraRig != null && cameraRig.Mode == CameraMode.ThirdPerson ? 1f : 0f;
                 return;
             }
 
             GameWorld world = GameWorld.Current;
-            Camera view = cameraRig != null ? cameraRig.Camera : GetComponentInChildren<Camera>();
             if (world == null || view == null)
             {
                 Debug.LogWarning("HeldMap: needs a GameWorld in the scene and a camera on the player rig; the map is disabled.", this);
@@ -235,14 +280,21 @@ namespace MedievalZen.Travel
 
         private void OnDestroy()
         {
+            scroll?.Dispose();
+            scroll = null;
             if (texture != null) Destroy(texture);
             if (sheetMaterial != null) Destroy(sheetMaterial);
+            if (rollerMaterial != null) Destroy(rollerMaterial);
         }
+
+        private static readonly int FrameCostId = Review.FrameCost.Register("HeldMap");
 
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (sheet == null) return;
             float dt = Time.deltaTime;
+            scroll?.Tick(IsOpen, dt);   // folded too: the scroll is prepared quietly while the traveller walks
             raise = Mathf.MoveTowards(raise, IsOpen ? 1f : 0f, dt / animationSeconds);
             float targetMode = cameraRig != null && cameraRig.Mode == CameraMode.ThirdPerson ? 1f : 0f;
             modeBlend = Mathf.MoveTowards(modeBlend, targetMode, dt / 0.35f);
@@ -254,10 +306,19 @@ namespace MedievalZen.Travel
             }
 
             float k = Mathf.SmoothStep(0f, 1f, raise);
-            Vector3 held = Vector3.Lerp(heldPositionFirstPerson, heldPositionThirdPerson, Mathf.SmoothStep(0f, 1f, modeBlend));
+            Vector3 held = scroll != null
+                ? Vector3.Lerp(scrollHeldPositionFirstPerson, scrollHeldPositionThirdPerson, Mathf.SmoothStep(0f, 1f, modeBlend))
+                : Vector3.Lerp(heldPositionFirstPerson, heldPositionThirdPerson, Mathf.SmoothStep(0f, 1f, modeBlend));
             sheet.localPosition = Vector3.LerpUnclamped(loweredPosition, held, k);
             sheet.localRotation = Quaternion.Euler(Mathf.Lerp(loweredTilt, heldTilt, k), 0f, 0f);
             UpdateSheetTint();
+            if (scroll != null)
+            {
+                if (!IsOpen) return;
+                if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) scroll.Select();
+                SetPrompt(scroll.Prompt());
+                return;
+            }
 
             overlay.SetPlayer(projection.WorldToMapUV(transform.position), transform.eulerAngles.y);
             overlay.Animate(Time.time);
@@ -324,7 +385,8 @@ namespace MedievalZen.Travel
         private void OnDestinationChanged(Settlement settlement)
         {
             nextRouteRefresh = 0f;
-            if (IsOpen) RefreshRoute();
+            // The scroll draws its own destination ring; the finite map's overlay and projection do not exist there.
+            if (IsOpen && scroll == null) RefreshRoute();
         }
 
         private void RefreshRoute()
@@ -383,6 +445,7 @@ namespace MedievalZen.Travel
             Color ambient = RenderSettings.ambientSkyColor;
             float light = Mathf.Clamp(0.4f + 1.1f * (0.3f * ambient.r + 0.55f * ambient.g + 0.15f * ambient.b), 0.55f, 1f);
             sheetMaterial.SetColor(BaseColorId, new Color(light, light, light * 0.97f, 1f));
+            if (rollerMaterial != null) rollerMaterial.SetColor(BaseColorId, new Color(0.42f * light, 0.27f * light, 0.15f * light, 1f));
         }
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -397,7 +460,7 @@ namespace MedievalZen.Travel
             sheet.localPosition = loweredPosition;
             sheet.localRotation = Quaternion.Euler(loweredTilt, 0f, 0f);
 
-            go.AddComponent<MeshFilter>().sharedMesh = BuildMesh(sheetSize, curl, 10);
+            go.AddComponent<MeshFilter>().sharedMesh = BuildMesh(sheetSize, sheetSize, curl, 10, 10);
             var renderer = go.AddComponent<MeshRenderer>();
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
@@ -415,31 +478,134 @@ namespace MedievalZen.Travel
             go.SetActive(false);
         }
 
-        /// <summary>A (segments+1)² grid facing −Z (the camera), UV 0..1, edges curling away along +Z.</summary>
-        private static Mesh BuildMesh(float size, float curlDepth, int segments)
+        /// <summary>The endless road's scroll: a taller sheet showing the strip's ring texture, two wooden rollers, the strip overlay.</summary>
+        private void BuildScroll(Transform cameraTransform)
         {
-            int n = segments + 1;
-            var vertices = new Vector3[n * n];
-            var uvs = new Vector2[n * n];
-            for (int y = 0; y < n; y++)
+            var go = new GameObject("HeldScroll");
+            go.layer = cameraTransform.gameObject.layer;
+            sheet = go.transform;
+            sheet.SetParent(cameraTransform, false);
+            sheet.localPosition = loweredPosition;
+            sheet.localRotation = Quaternion.Euler(loweredTilt, 0f, 0f);
+            float width = EndlessScrollMap.SheetWidth;
+            float height = EndlessScrollMap.SheetHeight;
+            float scrollCurl = curl * 0.6f;
+
+            go.AddComponent<MeshFilter>().sharedMesh = BuildMesh(width, height, scrollCurl, 8, 12);
+            var renderer = go.AddComponent<MeshRenderer>();
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            Shader shader = sheetShader != null ? sheetShader : Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null) shader = Shader.Find("Unlit/Texture");
+            sheetMaterial = new Material(shader) { name = "HeldScroll" };
+            if (sheetMaterial.HasProperty("_Cull")) sheetMaterial.SetFloat("_Cull", 0f);
+            renderer.sharedMaterial = sheetMaterial;
+
+            // Rollers along the top and bottom edges, a little behind the paper, with turned knobs past the sides.
+            rollerMaterial = new Material(shader) { name = "ScrollRoller" };
+            rollerMaterial.SetColor(BaseColorId, new Color(0.42f, 0.27f, 0.15f, 1f));
+            Mesh rod = BuildRoller(width + 0.028f, rollerRadius, 14);
+            for (int end = -1; end <= 1; end += 2)
+            {
+                var roller = new GameObject(end > 0 ? "RollerTop" : "RollerBottom");
+                roller.layer = go.layer;
+                roller.transform.SetParent(sheet, false);
+                roller.transform.localPosition = new Vector3(0f, end * (height * 0.5f + rollerRadius * 0.35f), scrollCurl * 0.35f + rollerRadius * 0.55f);
+                roller.AddComponent<MeshFilter>().sharedMesh = rod;
+                var rr = roller.AddComponent<MeshRenderer>();
+                rr.sharedMaterial = rollerMaterial;
+                rr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                rr.receiveShadows = false;
+            }
+
+            var stripOverlay = go.AddComponent<EndlessMapOverlay>();
+            stripOverlay.Build(width, height, (float)(2.0 * StripMapLayout.HalfWidth), 0.002f);
+            scroll = new EndlessScrollMap(sheetMaterial, stripOverlay, transform, travel);
+            Texture ringTexture = scroll.Texture;
+            sheetMaterial.mainTexture = ringTexture;
+            if (sheetMaterial.HasProperty(BaseMapId)) sheetMaterial.SetTexture(BaseMapId, ringTexture);
+            go.SetActive(false);
+        }
+
+        /// <summary>A capped cylinder along X of <paramref name="length"/> and <paramref name="radius"/>, with slightly thicker knobs at both ends.</summary>
+        private static Mesh BuildRoller(float length, float radius, int sides)
+        {
+            float[] xs = { -0.5f, -0.47f, -0.46f, 0.46f, 0.47f, 0.5f };
+            float[] rs = { 1.25f, 1.25f, 1f, 1f, 1.25f, 1.25f };
+            int rings = xs.Length;
+            var vertices = new System.Collections.Generic.List<Vector3>();
+            var triangles = new System.Collections.Generic.List<int>();
+            for (int r = 0; r < rings; r++)
+            {
+                for (int k = 0; k < sides; k++)
+                {
+                    float a = k * Mathf.PI * 2f / sides;
+                    vertices.Add(new Vector3(xs[r] * length, Mathf.Cos(a) * radius * rs[r], Mathf.Sin(a) * radius * rs[r]));
+                }
+            }
+
+            for (int r = 0; r + 1 < rings; r++)
+            {
+                for (int k = 0; k < sides; k++)
+                {
+                    int a = r * sides + k, b = r * sides + (k + 1) % sides, c = a + sides, d = b + sides;
+                    triangles.Add(a);
+                    triangles.Add(c);
+                    triangles.Add(b);
+                    triangles.Add(b);
+                    triangles.Add(c);
+                    triangles.Add(d);
+                }
+            }
+
+            for (int end = 0; end < 2; end++)
+            {
+                int centre = vertices.Count;
+                vertices.Add(new Vector3((end == 0 ? -0.5f : 0.5f) * length, 0f, 0f));
+                int ringStart = end == 0 ? 0 : (rings - 1) * sides;
+                for (int k = 0; k < sides; k++)
+                {
+                    int a = ringStart + k, b = ringStart + (k + 1) % sides;
+                    triangles.Add(centre);
+                    triangles.Add(end == 0 ? a : b);
+                    triangles.Add(end == 0 ? b : a);
+                }
+            }
+
+            var mesh = new Mesh { name = "ScrollRoller" };
+            mesh.SetVertices(vertices);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// <summary>A (columns+1) × (rows+1) grid facing −Z (the camera), UV 0..1, edges curling away along +Z.</summary>
+        private static Mesh BuildMesh(float width, float height, float curlDepth, int columns, int rows)
+        {
+            int n = columns + 1;
+            var vertices = new Vector3[n * (rows + 1)];
+            var uvs = new Vector2[vertices.Length];
+            for (int y = 0; y <= rows; y++)
             {
                 for (int x = 0; x < n; x++)
                 {
-                    float u = x / (float)segments;
-                    float v = y / (float)segments;
+                    float u = x / (float)columns;
+                    float v = y / (float)rows;
                     float cx = u * 2f - 1f;
                     float cy = v * 2f - 1f;
                     float z = curlDepth * (cx * cx * 0.8f + cy * cy * cy * cy * 0.35f);
-                    vertices[y * n + x] = new Vector3((u - 0.5f) * size, (v - 0.5f) * size, z);
+                    vertices[y * n + x] = new Vector3((u - 0.5f) * width, (v - 0.5f) * height, z);
                     uvs[y * n + x] = new Vector2(u, v);
                 }
             }
 
-            var triangles = new int[segments * segments * 6];
+            var triangles = new int[columns * rows * 6];
             int t = 0;
-            for (int y = 0; y < segments; y++)
+            for (int y = 0; y < rows; y++)
             {
-                for (int x = 0; x < segments; x++)
+                for (int x = 0; x < columns; x++)
                 {
                     int bl = y * n + x;
                     int br = bl + 1;

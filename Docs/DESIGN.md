@@ -363,6 +363,16 @@ and globs `Assets/_Project/**/*.cs` (editor assembly separately, adding `UnityEd
 from `...\Editor\Data\Managed\`). `dotnet build` on it catches type and syntax errors; the
 editor remains the final judge.
 
+### Golden hashes under Mono
+The editor runs C# on its embedded Mono (`Data\MonoBleedingEdge\EmbedRuntime\mono-2.0-bdwgc.dll`, float32 off): float
+arithmetic is evaluated in double and rounded only where the JIT stores a value, so a new local, a branch or an inlined helper
+can move last bits under Mono while CoreCLR stays bit-identical (the standalone `bin\mono.exe` is another build and gives other
+values: never record goldens with it). Check "golden hashes unchanged" on that runtime with
+`powershell -NoProfile -ExecutionPolicy Bypass -File Tools\MonoCheck\run.ps1 [-Filter EndlessGeneratorTests.FiniteWorld] [-Golden] [-Clr]`
+(builds `Assets/_Project` and hosts the editor's runtime in PowerShell; `-Clr` runs the same build on .NET 8). Never pass a file in
+`Library\ScriptAssemblies` to a build or program (copy it first), and build with `-p:UseSharedCompilation=false`.
+The finite splat is a frozen copy (`TerrainShaper.ComputeFiniteSplatAsOf2026_10_02`): do not edit it.
+
 ## Later ideas (not now)
 Horse/cart riding; rivers and bridges (`PolygonGeneric` river ground pieces, Meadow
 `SM_Prop_Bridge_01`); a proper Synty medieval pack (POLYGON Fantasy Kingdom) for towns;

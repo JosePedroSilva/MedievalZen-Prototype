@@ -41,8 +41,11 @@ namespace MedievalZen.Travel
             if (travel != null) travel.Arrived -= Announce;
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("ArrivalAnnouncer");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (Time.time < nextCheck) return;
             nextCheck = Time.time + checkInterval;
             RoadNetwork roads = GameWorld.Current != null ? GameWorld.Current.Roads : null;
@@ -69,8 +72,11 @@ namespace MedievalZen.Travel
             }
         }
 
+        private static readonly int CostAnnounce = Review.FrameCost.Register("ArrivalAnnouncer.Announce");
+
         private void Announce(Settlement settlement)
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostAnnounce);   // stall hunt: the per-frame culprit
             if (settlement == null) return;
             if (!announced.Add(settlement.Name)) return;
 

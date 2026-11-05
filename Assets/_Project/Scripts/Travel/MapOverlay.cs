@@ -83,7 +83,8 @@ namespace MedievalZen.Travel
                             Label($"Pass {landmark.name}", landmark.name, 19, FontStyle.Italic, UiKit.FadedInk, uv, new Vector2(0f, 14f), new Vector2(0.5f, 0f), 0f);
                             break;
                         case LandmarkKind.Viewpoint:
-                            Label($"Viewpoint {landmark.name}", landmark.name, 17, FontStyle.Italic, UiKit.FadedInk, uv, new Vector2(12f, 0f), new Vector2(0f, 0.5f), 0f);
+                        case LandmarkKind.Structure:
+                            Label($"{landmark.kind} {landmark.name}", landmark.name, 17, FontStyle.Italic, UiKit.FadedInk, uv, new Vector2(12f, 0f), new Vector2(0f, 0.5f), 0f);
                             break;
                         default:
                             Label($"Lake {landmark.name}", landmark.name, 20, FontStyle.Italic, new Color(0.18f, 0.3f, 0.38f), uv, Vector2.zero, new Vector2(0.5f, 0.5f), -4f);

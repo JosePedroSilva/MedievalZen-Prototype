@@ -36,8 +36,8 @@ namespace MedievalZen.Environment
         /// <summary>Fraction of the day elapsed, 0..1.</summary>
         public float Progress => Hour / HoursPerDay;
 
-        /// <summary>True while the sun is above the horizon.</summary>
-        public bool IsDay => SunElevation(Hour) > 0f;
+        /// <summary>True while the sun is above the horizon (the season's day: <see cref="SolarHour(float, float)"/>).</summary>
+        public bool IsDay => SunElevation(SolarHour(Hour, Season.Year)) > 0f;
 
         /// <summary>Real-time minutes per in-game day (clamped to at least 0.01).</summary>
         public float DayLengthMinutes
@@ -93,6 +93,62 @@ namespace MedievalZen.Environment
         public static float SunAzimuth(float hour)
         {
             return Wrap(hour) * (360f / HoursPerDay);
+        }
+
+        /// <summary>Summer's sunrise and sunset (midsummer; spring and autumn keep <see cref="Sunrise"/> and <see cref="Sunset"/>, the equinox).</summary>
+        public const float SummerSunrise = 4.75f, SummerSunset = 19.25f;
+
+        /// <summary>Degrees the midsummer noon sun stands above the equinox's (58° → 64° with the day cycle's default).</summary>
+        public const float SummerNoonGain = 6f;
+
+        /// <summary>Hour of sunrise at a year of <see cref="Season"/>: 06:00 in spring and autumn, 04:45 at midsummer, blended between.</summary>
+        public static float SunriseAt(float year) => Season.Blend(year, Sunrise, SummerSunrise, Sunrise);
+
+        /// <summary>Hour of sunset at a year of <see cref="Season"/>: 18:00 in spring and autumn, 19:15 at midsummer, blended between.</summary>
+        public static float SunsetAt(float year) => Season.Blend(year, Sunset, SummerSunset, Sunset);
+
+        /// <summary>Noon elevation at a year, from the equinox's <paramref name="equinoxElevation"/> (exactly it in spring and autumn).</summary>
+        public static float NoonElevationAt(float year, float equinoxElevation) =>
+            Season.Blend(year, equinoxElevation, equinoxElevation + SummerNoonGain, equinoxElevation);
+
+        /// <summary>Today's sunrise hour (the current <see cref="Season.Year"/>).</summary>
+        public static float SeasonSunrise => SunriseAt(Season.Year);
+
+        /// <summary>Today's sunset hour (the current <see cref="Season.Year"/>).</summary>
+        public static float SeasonSunset => SunsetAt(Season.Year);
+
+        /// <summary>
+        /// The "sky hour" of a clock hour: the hour on the equinox day whose sun, sky, fog and light the clock hour shows. Every
+        /// sky gradient is keyed to the equinox day (dawn at 06:00, dusk at 18:00); a longer day is remapped piecewise linearly so
+        /// that <paramref name="sunrise"/> lands on 06:00, noon stays at 12:00, <paramref name="sunset"/> lands on 18:00 and the
+        /// night is squeezed to fit. With the equinox's own sunrise and sunset it returns <paramref name="hour"/> unchanged, bit
+        /// for bit (spring and autumn).
+        /// </summary>
+        public static float SolarHour(float hour, float sunrise, float sunset)
+        {
+            if (sunrise == Sunrise && sunset == Sunset) return hour;
+            float day = sunset - sunrise;
+            if (!(day > 1f && day < HoursPerDay - 1f)) return hour;
+            float h = Wrap(hour);
+            if (h >= sunrise && h <= sunset) return Wrap(Sunrise + (h - sunrise) * (12f / day));
+            float sinceSunset = Wrap(h - sunset);
+            return Wrap(Sunset + sinceSunset * (12f / (HoursPerDay - day)));
+        }
+
+        /// <summary><see cref="SolarHour(float, float, float)"/> for a year of <see cref="Season"/>.</summary>
+        public static float SolarHour(float hour, float year) => SolarHour(hour, SunriseAt(year), SunsetAt(year));
+
+        /// <summary>The inverse of <see cref="SolarHour(float, float)"/>: the clock hour at which the sky shows <paramref name="solarHour"/> (unchanged in spring and autumn).</summary>
+        public static float ClockHour(float solarHour, float year)
+        {
+            float sunrise = SunriseAt(year), sunset = SunsetAt(year);
+            if (sunrise == Sunrise && sunset == Sunset) return solarHour;
+            float day = sunset - sunrise;
+            if (!(day > 1f && day < HoursPerDay - 1f)) return solarHour;
+            float s = Wrap(solarHour);
+            if (s >= Sunrise && s <= Sunset) return Wrap(sunrise + (s - Sunrise) * (day / 12f));
+            float sinceDusk = Wrap(s - Sunset);
+            return Wrap(sunset + sinceDusk * ((HoursPerDay - day) / 12f));
         }
 
         /// <summary>Wraps any hour into [0, 24).</summary>

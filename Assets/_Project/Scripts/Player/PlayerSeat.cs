@@ -364,8 +364,11 @@ namespace MedievalZen.Player
             lastApproachPosition += delta;
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("PlayerSeat");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             float dt = Time.deltaTime;
             if (Phase == SeatPhase.Idle)
             {

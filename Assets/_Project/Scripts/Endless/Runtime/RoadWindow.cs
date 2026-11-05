@@ -195,12 +195,19 @@ namespace MedievalZen.Endless
         /// </summary>
         public static Waypoint Select(IReadOnlyList<Waypoint> inns, double s, int direction, double skip = DefaultSkip)
         {
+            return Select(inns, s, direction, skip, false);
+        }
+
+        private static Waypoint Select(IReadOnlyList<Waypoint> places, double s, int direction, double skip, bool villages)
+        {
             Waypoint best = null;
             double bestGap = double.PositiveInfinity;
-            for (int i = 0; i < inns.Count; i++)
+            for (int i = 0; i < places.Count; i++)
             {
-                Waypoint w = inns[i];
-                if (w == null || w.Kind != WaypointKind.Inn) continue;
+                Waypoint w = places[i];
+                if (w == null) continue;
+                bool wanted = villages ? w.Kind == WaypointKind.Hamlet || w.IsVillageLike : w.Kind == WaypointKind.Inn;
+                if (!wanted) continue;
                 double gap = (w.S - s) * (direction >= 0 ? 1.0 : -1.0);
                 if (gap <= skip || gap >= bestGap) continue;
                 bestGap = gap;
@@ -211,21 +218,57 @@ namespace MedievalZen.Endless
         }
 
         /// <summary>
+        /// Among <paramref name="places"/> (any order), the nearest hamlet or village strictly beyond <paramref name="skip"/> metres
+        /// from <paramref name="s"/> in <paramref name="direction"/>; null when none. Villages are rare (one per farmland region), and
+        /// hopping from inn to inn passes them unseen, so the Journey menu offers them by name.
+        /// </summary>
+        public static Waypoint SelectVillage(IReadOnlyList<Waypoint> places, double s, int direction, double skip = DefaultSkip) =>
+            Select(places, s, direction, skip, true);
+
+        /// <summary>
         /// The next inn along <paramref name="generator"/>'s road from <paramref name="s"/> in <paramref name="direction"/>,
         /// searching up to <paramref name="searchLimit"/> metres in 1.5 km steps; null when there is none that close.
         /// </summary>
-        public static Waypoint Find(IEndlessGenerator generator, double s, int direction, double skip = DefaultSkip, double searchLimit = 8000.0)
+        public static Waypoint Find(IEndlessGenerator generator, double s, int direction, double skip = DefaultSkip, double searchLimit = 8000.0) =>
+            Find(generator, s, direction, skip, searchLimit, false);
+
+        /// <summary>
+        /// The next hamlet or village along the road of <paramref name="generator"/> from <paramref name="s"/> in
+        /// <paramref name="direction"/>, searching up to <paramref name="searchLimit"/> metres; null when there is none that close.
+        /// </summary>
+        public static Waypoint FindVillage(IEndlessGenerator generator, double s, int direction, double skip = DefaultSkip, double searchLimit = 12000.0) =>
+            Find(generator, s, direction, skip, searchLimit, true);
+
+        /// <summary>
+        /// True when a search of <paramref name="searchLimit"/> metres each way from <paramref name="s"/> (<c>Find</c>,
+        /// <see cref="FindVillage"/>) only reads cached waypoints: no lazy generation, a fraction of a millisecond. Always true for
+        /// a generator without that cache. Main-thread callers check it and keep their last answer until the warmer has built the
+        /// regions (<see cref="Generation.EndlessGenerator.WarmWaypoints"/> on a worker).
+        /// </summary>
+        public static bool Ready(IEndlessGenerator generator, double s, double searchLimit) =>
+            !(generator is Generation.EndlessGenerator g) || g.WaypointsCached(s - searchLimit - SearchStep, s + searchLimit + SearchStep);
+
+        /// <summary>The searches ask the generator for this much road at a time.</summary>
+        public const double SearchStep = 1500.0;
+
+        /// <summary>
+        /// The endless world warms the region waypoints this far each way round the traveller on a worker (again after each
+        /// 1 km): the 12 km village search plus one step stays inside it.
+        /// </summary>
+        public const double WarmReach = 16000.0;
+
+        private static Waypoint Find(IEndlessGenerator generator, double s, int direction, double skip, double searchLimit, bool villages)
         {
             var buffer = new List<Waypoint>();
-            const double step = 1500.0;
+            const double step = SearchStep;
             for (double covered = 0.0; covered < searchLimit; covered += step)
             {
                 buffer.Clear();
                 double a = direction >= 0 ? s + covered : s - covered - step;
                 double b = direction >= 0 ? s + covered + step : s - covered;
                 generator.Waypoints(a, b, buffer);
-                Waypoint inn = Select(buffer, s, direction, skip);
-                if (inn != null) return inn;
+                Waypoint place = Select(buffer, s, direction, skip, villages);
+                if (place != null) return place;
             }
 
             return null;

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using MedievalZen.Environment;
 using MedievalZen.Player;
+using MedievalZen.Sound;
 
 namespace MedievalZen.UI
 {
@@ -32,9 +33,14 @@ namespace MedievalZen.UI
         /// <summary>
         /// Version written by <see cref="ToJson"/>. 2 (2026-10-02) added the cinematic camera (<see cref="CinematicCamera"/>,
         /// <see cref="CinematicWhenTravelling"/>, <see cref="Letterbox"/>) and <see cref="HudAlways"/>; a version-1 blob loads with
-        /// their defaults.
+        /// their defaults. 3 (2026-10-02) added the animals (<see cref="Animals"/>, <see cref="AnimalVolume"/>); older blobs load
+        /// with theirs. 4 (2026-10-02) added <see cref="RichLight"/>; older blobs load with it on. 5 (2026-10-06) added the sound
+        /// page (<see cref="MasterVolume"/>, <see cref="AmbienceVolume"/>, <see cref="MusicVolume"/>, <see cref="FootstepVolume"/>,
+        /// <see cref="MusicFrequency"/>, <see cref="MusicTitles"/>); older blobs load with the <see cref="SoundMix"/> defaults.
+        /// 6 (2026-10-06) added <see cref="WalkingPace"/>; older blobs load with pace 1. 7 (2026-10-06) added
+        /// <see cref="Season"/>; older blobs load with fixed autumn (the look before seasons).
         /// </summary>
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 7;
 
         /// <summary>Range of <see cref="FogAmount"/>, <see cref="HazeDistance"/> and <see cref="CloudSoftness"/>.</summary>
         public const float AtmosphereMax = 2f;
@@ -90,6 +96,39 @@ namespace MedievalZen.UI
         /// <summary>Keep the clock and destination on screen even during cinematic shots and while seated ("Always").</summary>
         public bool HudAlways;
 
+        /// <summary>Animals along the road are shown.</summary>
+        public bool Animals = true;
+
+        /// <summary>Volume of the animals' calls, 0..1.</summary>
+        public float AnimalVolume = 0.5f;
+
+        /// <summary>The rich light and colour look (<see cref="LightLook"/>); off shows the look before it, for comparison.</summary>
+        public bool RichLight = LightLook.DefaultRich;
+
+        /// <summary>Master volume, 0..1 (<c>AudioListener.volume</c>).</summary>
+        public float MasterVolume = 1f;
+
+        /// <summary>Ambience slider, 0..1 (<see cref="SoundMix.Ambience"/>).</summary>
+        public float AmbienceVolume = SoundMix.DefaultAmbience;
+
+        /// <summary>Music slider, 0..1 (<see cref="SoundMix.Music"/>).</summary>
+        public float MusicVolume = SoundMix.DefaultMusic;
+
+        /// <summary>Footsteps slider, 0..1 (<see cref="SoundMix.Footsteps"/>).</summary>
+        public float FootstepVolume = SoundMix.DefaultFootsteps;
+
+        /// <summary>How often a piece of music may start (<see cref="SoundMix.Frequency"/>); Rare by default, the user's choice.</summary>
+        public MusicFrequency MusicFrequency = MusicFrequency.Rare;
+
+        /// <summary>Show a piece's title when it starts (<see cref="SoundMix.ShowMusicTitles"/>).</summary>
+        public bool MusicTitles = true;
+
+        /// <summary>Walking pace (<see cref="WalkPace"/>: 0.5..1.5 in steps of 0.1; 1 = the validated walking and travel speeds).</summary>
+        public float WalkingPace = WalkPace.Default;
+
+        /// <summary>The season (<see cref="SeasonChoice.Autumn"/> = the look before seasons, the default; Auto follows the journey's days).</summary>
+        public SeasonChoice Season = SeasonChoice.Autumn;
+
         /// <summary>A copy of this object.</summary>
         public JourneySettings Clone() => (JourneySettings)MemberwiseClone();
 
@@ -104,6 +143,14 @@ namespace MedievalZen.UI
             CloudSoftness = ClampFloat(CloudSoftness, 0f, AtmosphereMax, 1f);
             WindVolume = ClampFloat(WindVolume, 0f, WindVolumeMax, 0.06f);
             LookSpeed = ClampFloat(LookSpeed, LookSpeedMin, LookSpeedMax, 1f);
+            AnimalVolume = ClampFloat(AnimalVolume, 0f, 1f, 0.5f);
+            if (!Enum.IsDefined(typeof(MusicFrequency), MusicFrequency)) MusicFrequency = MusicFrequency.Rare;
+            MasterVolume = ClampFloat(MasterVolume, 0f, 1f, 1f);
+            AmbienceVolume = ClampFloat(AmbienceVolume, 0f, 1f, SoundMix.DefaultAmbience);
+            MusicVolume = ClampFloat(MusicVolume, 0f, 1f, SoundMix.DefaultMusic);
+            FootstepVolume = ClampFloat(FootstepVolume, 0f, 1f, SoundMix.DefaultFootsteps);
+            WalkingPace = WalkPace.Clamp(WalkingPace);
+            if (!Enum.IsDefined(typeof(SeasonChoice), Season)) Season = SeasonChoice.Autumn;
             return this;
         }
 
@@ -116,14 +163,20 @@ namespace MedievalZen.UI
                    WindSound == other.WindSound && Near(WindVolume, other.WindVolume) && Camera == other.Camera &&
                    Near(LookSpeed, other.LookSpeed) && InvertY == other.InvertY && ShowHud == other.ShowHud &&
                    CinematicCamera == other.CinematicCamera && CinematicWhenTravelling == other.CinematicWhenTravelling &&
-                   Letterbox == other.Letterbox && HudAlways == other.HudAlways;
+                   Letterbox == other.Letterbox && HudAlways == other.HudAlways && Animals == other.Animals &&
+                   Near(AnimalVolume, other.AnimalVolume) && RichLight == other.RichLight &&
+                   Near(MasterVolume, other.MasterVolume) && Near(AmbienceVolume, other.AmbienceVolume) &&
+                   Near(MusicVolume, other.MusicVolume) && Near(FootstepVolume, other.FootstepVolume) &&
+                   MusicFrequency == other.MusicFrequency && MusicTitles == other.MusicTitles &&
+                   Near(WalkingPace, other.WalkingPace) && Season == other.Season;
         }
 
         /// <summary>
         /// Serialises to one flat JSON object, e.g.
         /// <c>{"version":1,"flow":"Normal","weather":"Auto","fog":1,"haze":1,"clouds":1,"wind":false,"windVolume":0.06,
         /// "camera":"ThirdPerson","lookSpeed":1,"invertY":false,"showHud":true,"cinematic":false,"cinematicTravel":true,
-        /// "letterbox":true,"hudAlways":false}</c>. Enums are written by name so reordering
+        /// "letterbox":true,"hudAlways":false,"animals":true,"animalVolume":0.5,"richLight":true,"master":1,"ambience":0.8,"music":0.8,
+        /// "footsteps":0.7,"musicFrequency":"Rare","musicTitles":true,"walkPace":1}</c>. Enums are written by name so reordering
         /// them never changes a saved choice.
         /// </summary>
         public string ToJson()
@@ -146,6 +199,17 @@ namespace MedievalZen.UI
             Append(sb, "cinematicTravel", CinematicWhenTravelling ? "true" : "false", false);
             Append(sb, "letterbox", Letterbox ? "true" : "false", false);
             Append(sb, "hudAlways", HudAlways ? "true" : "false", false);
+            Append(sb, "animals", Animals ? "true" : "false", false);
+            Append(sb, "animalVolume", Number(AnimalVolume), false);
+            Append(sb, "richLight", RichLight ? "true" : "false", false);
+            Append(sb, "master", Number(MasterVolume), false);
+            Append(sb, "ambience", Number(AmbienceVolume), false);
+            Append(sb, "music", Number(MusicVolume), false);
+            Append(sb, "footsteps", Number(FootstepVolume), false);
+            Append(sb, "musicFrequency", MusicFrequency.ToString(), true);
+            Append(sb, "musicTitles", MusicTitles ? "true" : "false", false);
+            Append(sb, "walkPace", Number(WalkingPace), false);
+            Append(sb, "season", Season.ToString(), true);
             sb.Append('}');
             return sb.ToString();
         }
@@ -185,6 +249,42 @@ namespace MedievalZen.UI
                 if (TryBool(values, "cinematicTravel", out bool cinematicTravel)) s.CinematicWhenTravelling = cinematicTravel;
                 if (TryBool(values, "letterbox", out bool bars)) s.Letterbox = bars;
                 if (TryBool(values, "hudAlways", out bool always)) s.HudAlways = always;
+            }
+
+            if (version >= 3)
+            {
+                // Added in version 3; older blobs keep the defaults for these.
+                if (TryBool(values, "animals", out bool animals)) s.Animals = animals;
+                if (TryNumber(values, "animalVolume", out float animalVolume)) s.AnimalVolume = animalVolume;
+            }
+
+            if (version >= 4)
+            {
+                // Added in version 4; older blobs keep the default (on).
+                if (TryBool(values, "richLight", out bool richLight)) s.RichLight = richLight;
+            }
+
+            if (version >= 5)
+            {
+                // Added in version 5 (the sound page); older blobs keep the SoundMix defaults.
+                if (TryNumber(values, "master", out float master)) s.MasterVolume = master;
+                if (TryNumber(values, "ambience", out float ambience)) s.AmbienceVolume = ambience;
+                if (TryNumber(values, "music", out float music)) s.MusicVolume = music;
+                if (TryNumber(values, "footsteps", out float footsteps)) s.FootstepVolume = footsteps;
+                if (TryEnum(values, "musicFrequency", out MusicFrequency frequency)) s.MusicFrequency = frequency;
+                if (TryBool(values, "musicTitles", out bool titles)) s.MusicTitles = titles;
+            }
+
+            if (version >= 6)
+            {
+                // Added in version 6; older blobs keep pace 1.
+                if (TryNumber(values, "walkPace", out float walkPace)) s.WalkingPace = walkPace;
+            }
+
+            if (version >= 7)
+            {
+                // Added in version 7; older blobs keep fixed autumn (the look before seasons).
+                if (TryEnum(values, "season", out SeasonChoice season)) s.Season = season;
             }
 
             s.Clamp();

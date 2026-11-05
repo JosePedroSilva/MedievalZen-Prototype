@@ -10,6 +10,9 @@ namespace MedievalZen.Environment
     /// coarse terrain sample close to the fog base altitude), keeps up to <c>AtmosphereController.MistAmount × maxActive</c>
     /// patches alive, and fades each one in/out with distance and the mist amount (strongest at dawn/dusk and in Misty
     /// weather). Patches fade by emission and particle alpha only, so there is never pop-in.
+    /// Forest pass (2026-10-05, endless road while <see cref="ForestMood.Allowed"/>): under a canopy, patches also lie among the
+    /// trunks of the wood around the traveller (35-110 m away, where the trees are dense), at dawn and dusk as the valley mist, and
+    /// in damp weather (rain, heavy overcast) even by day.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class MistField : MonoBehaviour, IOriginShiftable
@@ -24,11 +27,20 @@ namespace MedievalZen.Environment
             public float Level;
             public bool Wanted;
             public bool InUse;
+
+            // Third performance pass: what ApplyLevel last wrote (-1: nothing), so a steady patch costs no native calls per frame.
+            public float AppliedLevel = -1f;
+            public bool AppliedWanted;
         }
+
+        private static readonly float[] WoodRings = { 35f, 70f, 110f };
 
         [Header("References")]
         [SerializeField, Tooltip("Mist sheet effect (Synty PolygonGeneric FX_Fog_01).")]
         private GameObject mistPrefab = null;
+
+        /// <summary>The mist sheet effect (the arrival warm-up makes one behind the start hold's black screen).</summary>
+        public GameObject MistPrefab => mistPrefab;
 
         [SerializeField, Tooltip("Transform the mist gathers around (the player rig). Falls back to the main camera.")]
         private Transform target;
@@ -72,6 +84,7 @@ namespace MedievalZen.Environment
         private Patch[] patches = Array.Empty<Patch>();
         private float[] grid = Array.Empty<float>();
         private IWorldSurface surface;
+        private ITreeDensity woodDensity;
         private float nextCheck;
         private System.Random random;
 
@@ -93,8 +106,11 @@ namespace MedievalZen.Environment
             }
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("MistField");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (mistPrefab == null) return;
             if (target == null)
             {
@@ -105,6 +121,7 @@ namespace MedievalZen.Environment
 
             AtmosphereController atmosphere = AtmosphereController.Current;
             float amount = atmosphere != null ? atmosphere.MistAmount : 0.3f;
+            amount = Mathf.Max(amount, ForestDamp());
             Vector3 centre = target.position;
 
             if (Time.time >= nextCheck)
@@ -194,8 +211,10 @@ namespace MedievalZen.Environment
                 }
             }
 
-            // Valley hollows: local minima of a coarse height grid around the player.
             if (!HasGround) return count;
+            count = GatherWoodCandidates(centre, count, water);
+
+            // Valley hollows: local minima of a coarse height grid around the player.
             int n = Mathf.Clamp(Mathf.CeilToInt(radius * 2f / sampleSpacing) + 1, 3, 17);
             if (grid.Length != n * n) grid = new float[n * n];
             float half = (n - 1) * 0.5f * sampleSpacing;
@@ -232,6 +251,43 @@ namespace MedievalZen.Environment
                     var p = new Vector3(Snap(centre.x) - half + x * sampleSpacing, h + lift, Snap(centre.z) - half + z * sampleSpacing);
                     float lowness = float.IsInfinity(limit) ? 0.5f : 1f - Mathf.Clamp01((h - (limit - maxHeightAboveBase)) / Mathf.Max(1f, maxHeightAboveBase));
                     count = AddCandidate(count, p, centre, 0.6f + 0.5f * lowness);
+                }
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Forest pass: mist wanted among the trunks in damp weather (rain, heavy overcast), under a canopy only (0 otherwise, and in
+        /// the finite world).
+        /// </summary>
+        private static float ForestDamp()
+        {
+            if (!ForestMood.Allowed || ForestMood.Canopy <= 0.3f) return 0f;
+            WeatherPreset w = WeatherSystem.CurrentWeather;
+            float damp = Mathf.Clamp01(w.rain * 1.2f + Mathf.Max(0f, w.overcast - 0.6f) * 1.5f);
+            return 0.6f * damp * ForestMood.Canopy;
+        }
+
+        /// <summary>
+        /// Forest pass: candidate spots among the trunks (12 bearings × 35, 70 and 110 m) where the trees are dense, scored like the
+        /// hollows, while the traveller is under a canopy.
+        /// </summary>
+        private int GatherWoodCandidates(Vector3 centre, int count, float water)
+        {
+            if (!ForestMood.Allowed || ForestMood.Canopy <= 0.3f) return count;
+            if (woodDensity == null) woodDensity = surface.CreateTreeDensity(16f);
+            for (int k = 0; k < 12 && count < MaxCandidates; k++)
+            {
+                float a = k * Mathf.PI / 6f;
+                foreach (float r in WoodRings)
+                {
+                    var p = new Vector3(centre.x + Mathf.Cos(a) * r, 0f, centre.z + Mathf.Sin(a) * r);
+                    if (woodDensity.Sample(p.x, p.z) < 0.8f) continue;
+                    float h = GroundHeight(p);
+                    if (water > 0f && h < water + 0.3f) continue;
+                    p.y = h + lift * 0.8f;
+                    count = AddCandidate(count, p, centre, 0.75f + 0.4f * ForestMood.Canopy);
                 }
             }
 
@@ -315,6 +371,7 @@ namespace MedievalZen.Environment
         {
             if (patch.Instance == null)
             {
+                Review.FrameCost.FirstUse("Instantiate " + mistPrefab.name);
                 patch.Instance = Instantiate(mistPrefab, transform);
                 patch.Instance.name = mistPrefab.name;
                 patch.Systems = patch.Instance.GetComponentsInChildren<ParticleSystem>(true);
@@ -334,6 +391,7 @@ namespace MedievalZen.Environment
             patch.Level = 0f;
             patch.Wanted = true;
             patch.InUse = true;
+            patch.AppliedLevel = -1f;
             ApplyLevel(patch);
             patch.Instance.SetActive(true);
             for (int i = 0; i < patch.Systems.Length; i++) patch.Systems[i].Play(false);
@@ -341,6 +399,9 @@ namespace MedievalZen.Environment
 
         private static void ApplyLevel(Patch patch)
         {
+            if (patch.AppliedLevel == patch.Level && patch.AppliedWanted == patch.Wanted) return;   // nothing changed since the last write
+            patch.AppliedLevel = patch.Level;
+            patch.AppliedWanted = patch.Wanted;
             for (int i = 0; i < patch.Systems.Length; i++)
             {
                 ParticleSystem ps = patch.Systems[i];

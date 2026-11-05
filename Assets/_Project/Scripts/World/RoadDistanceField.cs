@@ -54,10 +54,10 @@ namespace MedievalZen.World
                     float abx = b.x - a.x;
                     float abz = b.z - a.z;
                     float lengthSqr = abx * abx + abz * abz;
-                    int x0 = Mathf.Max(0, Mathf.FloorToInt((Mathf.Min(a.x, b.x) - maxDistance) / texel - 0.5f));
-                    int x1 = Mathf.Min(resolution - 1, Mathf.CeilToInt((Mathf.Max(a.x, b.x) + maxDistance) / texel - 0.5f));
-                    int z0 = Mathf.Max(0, Mathf.FloorToInt((Mathf.Min(a.z, b.z) - maxDistance) / texel - 0.5f));
-                    int z1 = Mathf.Min(resolution - 1, Mathf.CeilToInt((Mathf.Max(a.z, b.z) + maxDistance) / texel - 0.5f));
+                    int x0 = FastMathf.Max(0, FastMathf.FloorToInt((FastMathf.Min(a.x, b.x) - maxDistance) / texel - 0.5f));
+                    int x1 = FastMathf.Min(resolution - 1, Mathf.CeilToInt((FastMathf.Max(a.x, b.x) + maxDistance) / texel - 0.5f));
+                    int z0 = FastMathf.Max(0, FastMathf.FloorToInt((FastMathf.Min(a.z, b.z) - maxDistance) / texel - 0.5f));
+                    int z1 = FastMathf.Min(resolution - 1, Mathf.CeilToInt((FastMathf.Max(a.z, b.z) + maxDistance) / texel - 0.5f));
                     for (int z = z0; z <= z1; z++)
                     {
                         float pz = (z + 0.5f) * texel;
@@ -65,10 +65,10 @@ namespace MedievalZen.World
                         for (int x = x0; x <= x1; x++)
                         {
                             float px = (x + 0.5f) * texel;
-                            float t = lengthSqr > 0f ? Mathf.Clamp01(((px - a.x) * abx + (pz - a.z) * abz) / lengthSqr) : 0f;
+                            float t = lengthSqr > 0f ? FastMathf.Clamp01(((px - a.x) * abx + (pz - a.z) * abz) / lengthSqr) : 0f;
                             float dx = px - (a.x + abx * t);
                             float dz = pz - (a.z + abz * t);
-                            float d = Mathf.Sqrt(dx * dx + dz * dz);
+                            float d = FastMathf.Sqrt(dx * dx + dz * dz);
                             if (d < field.distance[row + x]) field.distance[row + x] = d;
                         }
                     }
@@ -81,10 +81,10 @@ namespace MedievalZen.World
         /// <summary>Bilinearly interpolated distance at world (x, z).</summary>
         public float Sample(float x, float z)
         {
-            float gx = Mathf.Clamp(x / TexelSize - 0.5f, 0f, Resolution - 1);
-            float gz = Mathf.Clamp(z / TexelSize - 0.5f, 0f, Resolution - 1);
-            int x0 = Mathf.Min((int)gx, Resolution - 2);
-            int z0 = Mathf.Min((int)gz, Resolution - 2);
+            float gx = FastMathf.Clamp(x / TexelSize - 0.5f, 0f, Resolution - 1);
+            float gz = FastMathf.Clamp(z / TexelSize - 0.5f, 0f, Resolution - 1);
+            int x0 = FastMathf.Min((int)gx, Resolution - 2);
+            int z0 = FastMathf.Min((int)gz, Resolution - 2);
             float tx = gx - x0;
             float tz = gz - z0;
             int i = z0 * Resolution + x0;

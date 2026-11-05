@@ -139,6 +139,13 @@ namespace MedievalZen.Environment
         /// <summary>Hour of the day, 0..24.</summary>
         public float Hour => Clock.Hour;
 
+        /// <summary>
+        /// The hour the sky shows (<see cref="DayClock.SolarHour(float, float)"/>): equal to <see cref="Hour"/> in spring and
+        /// autumn; in summer sunrise reads 06:00 and sunset 18:00. Systems keyed to the light (fog, lamps, fires) read this;
+        /// systems keyed to people's routine (meals, rounds) read <see cref="Hour"/>.
+        /// </summary>
+        public float SolarHour => DayClock.SolarHour(Clock.Hour, Season.Year);
+
         /// <summary>Day counter, starting at 1.</summary>
         public int Day => Clock.Day;
 
@@ -288,8 +295,11 @@ namespace MedievalZen.Environment
             if (Current == this) Current = null;
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("DayCycle");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             clock.Advance(Time.deltaTime * timeScale * fastForward);
             Apply();
             int whole = (int)clock.Hour;
@@ -299,6 +309,10 @@ namespace MedievalZen.Environment
                 HourChanged?.Invoke(clock.Hour);
             }
         }
+
+        private float noonAmbientLuma;
+
+        private static float Luma(Color c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
 
         private void CaptureMaterialColours()
         {
@@ -312,9 +326,13 @@ namespace MedievalZen.Environment
 
         private void Apply()
         {
-            float hour = Clock.Hour;
+            // The season (Season.Year) lengthens the summer day by remapping the clock hour onto the equinox day every gradient is
+            // keyed to (sunrise on the dawn keys, sunset on the dusk keys) and raises the noon sun; both are exact no-ops in
+            // spring and autumn, so the validated look is untouched there.
+            float year = Season.Year;
+            float hour = DayClock.SolarHour(Clock.Hour, year);
             float t = hour / DayClock.HoursPerDay;
-            float elevation = DayClock.SunElevation(hour, maxSunElevation);
+            float elevation = DayClock.SunElevation(hour, DayClock.NoonElevationAt(year, maxSunElevation));
             float azimuth = DayClock.SunAzimuth(hour) + azimuthOffset;
             SunElevation = elevation;
             {
@@ -322,6 +340,10 @@ namespace MedievalZen.Environment
                 Quaternion toLight = Quaternion.Euler(up ? elevation : -elevation, (up ? azimuth : azimuth + 180f) + 180f, 0f);
                 LightDirection = -(toLight * Vector3.forward);
             }
+
+            // "Rich light" (LightLook): by day a slightly stronger sun against a slightly lower, cooler ambient; more at the
+            // golden hours; nothing at night. All multipliers are 1 with the look off.
+            RichLighting rich = LightLookMath.Lighting(LightLook.Weight, elevation, Overcast);
 
             if (sun != null)
             {
@@ -336,14 +358,20 @@ namespace MedievalZen.Environment
                 float lightAzimuth = daytime ? azimuth : azimuth + 180f;
                 sun.transform.rotation = Quaternion.Euler(lightElevation, lightAzimuth + 180f, 0f);
                 sun.color = daytime ? sunColor.Evaluate(t) : moonColor;
-                sun.intensity = (daytime ? sunIntensity * sunFactor : moonIntensity * moonFactor) * Mathf.Max(0f, SunIntensityMultiplier);
+                sun.intensity = (daytime ? sunIntensity * sunFactor * rich.SunScale : moonIntensity * moonFactor) * Mathf.Max(0f, SunIntensityMultiplier);
                 sun.enabled = sun.intensity > 0.001f;
             }
 
-            RenderSettings.ambientSkyColor = Floor(ambientSky.Evaluate(t));
-            RenderSettings.ambientEquatorColor = Floor(ambientEquator.Evaluate(t));
-            RenderSettings.ambientGroundColor = Floor(ambientGround.Evaluate(t));
+            RenderSettings.ambientSkyColor = Floor(Scaled(ambientSky.Evaluate(t), rich.AmbientSky));
+            RenderSettings.ambientEquatorColor = Floor(Scaled(ambientEquator.Evaluate(t), rich.AmbientEquator));
+            RenderSettings.ambientGroundColor = Floor(Scaled(ambientGround.Evaluate(t), rich.AmbientGround));
             RenderSettings.ambientLight = RenderSettings.ambientSkyColor;
+
+            // The scene's environment reflection is baked from a daytime sky and never changes, so at dusk and at night every
+            // surface with some smoothness (grass, leaves) kept reflecting a bright sky and looked frosted white. Dim it with
+            // the ambient light: full strength at noon, in proportion to the sky's ambient brightness otherwise.
+            if (noonAmbientLuma <= 0f) noonAmbientLuma = Mathf.Max(0.01f, Luma(ambientSky.Evaluate(0.5f)));
+            RenderSettings.reflectionIntensity = Mathf.Clamp01(Luma(RenderSettings.ambientSkyColor) / noonAmbientLuma);
 
             float overcast = Mathf.Clamp01(Overcast);
             Color fog = OvercastBlend(fogColor.Evaluate(t), overcast, 0.95f);
@@ -423,6 +451,8 @@ namespace MedievalZen.Environment
             var grey = new Color(lum * 0.96f, lum * 0.98f, lum * 1.03f, c.a);
             return Color.Lerp(c, grey, amount * 0.85f);
         }
+
+        private static Color Scaled(Color c, in Tone3 s) => new Color(c.r * s.R, c.g * s.G, c.b * s.B, c.a);
 
         private Color Floor(Color c)
         {

@@ -2,11 +2,12 @@
   <!--
     Shared settings for the compile-check projects. These projects only type-check the Unity
     sources outside the editor; the Unity editor remains the real compiler.
-    Each project gets its own obj/ and bin/ folder because all three live in this directory.
+    Each project gets its own obj/ and bin/ folder because all three live in this directory; Tools/MonoCheck builds
+    them again under a Variant subfolder (optimised IL) so the two never share intermediate files.
   -->
   <PropertyGroup>
-    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-    <BaseOutputPath>$(MSBuildThisFileDirectory)bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(Variant)$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin\$(Variant)$(MSBuildProjectName)\</BaseOutputPath>
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>9.0</LangVersion>
     <Nullable>disable</Nullable>

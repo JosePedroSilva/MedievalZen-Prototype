@@ -99,7 +99,7 @@ namespace MedievalZen.Endless
         public EndlessFeatures Features => EndlessFeatures.And(new EndlessFeatures
         {
             farTiles = farTiles, farTrees = farTrees, nearTrees = nearTrees, grassDetails = grassDetails, props = props, water = water,
-            treeShadows = treeShadows,
+            treeShadows = treeShadows, animals = animals, forestExtras = forestExtras,
         }, SafetyLadder.FeaturesFor(safetyLevel));
 
         /// <summary>The GPU load right now (overlay and milestones).</summary>
@@ -163,6 +163,8 @@ namespace MedievalZen.Endless
             if (!f.grassDetails) off.Add("grass");
             if (!f.props) off.Add("props");
             if (!f.water) off.Add("water");
+            if (!f.animals) off.Add("animals");
+            if (!f.forestExtras) off.Add("forest extras");
             return off.Count == 0 ? "nothing" : string.Join(", ", off);
         }
 
@@ -193,7 +195,31 @@ namespace MedievalZen.Endless
             breadcrumb.phase = SafetyLadder.PhaseName(r.Phase);
             breadcrumb.lastLoad = Load.ToString();
             EndlessRunFile.Write(breadcrumb);
-            Debug.Log($"Endless road: running OK for {SafetyLadder.RunningOkSeconds:0} s at safety level {safetyLevel} — {breadcrumb.lastLoad}.", this);
+            Debug.Log($"Endless road: running OK for {SafetyLadder.RunningOkSeconds:0} s at safety level {safetyLevel} — {breadcrumb.lastLoad}.{ShadowReport()} Performance: {PerfSummary(perf.Recent, 300)}", this);
+            Debug.Log(perf.MarkerReport + (trees != null ? " " + trees.ImpostorSummary : string.Empty), this);
+        }
+
+        /// <summary>
+        /// Tree shadows as they are being drawn right now (for the log, so a "no shadows" report can be told apart from
+        /// "shadows hidden behind the trees"): distance in effect, shadow-only instances, and where the sun stands against the view.
+        /// </summary>
+        private string ShadowReport()
+        {
+            if (trees == null) return string.Empty;
+            string sun = string.Empty;
+            Light light = RenderSettings.sun;
+            Camera view = Camera.main;
+            if (light != null && view != null)
+            {
+                Vector3 toSun = -light.transform.forward;
+                float elevation = Mathf.Asin(Mathf.Clamp(toSun.y, -1f, 1f)) * Mathf.Rad2Deg;
+                Vector3 flatSun = new Vector3(toSun.x, 0f, toSun.z), flatView = new Vector3(view.transform.forward.x, 0f, view.transform.forward.z);
+                float bearing = flatSun.sqrMagnitude > 1e-6f && flatView.sqrMagnitude > 1e-6f ? Vector3.SignedAngle(flatView, flatSun, Vector3.up) : 0f;
+                sun = $"; sun {elevation:0}° high, {bearing:0}° from the view direction (180 = behind the camera), light shadows {light.shadows} strength {light.shadowStrength:0.00}";
+            }
+
+            return $" Tree shadows: {trees.ShadowDistanceInEffect:0} m in effect (setting {trees.ShadowDistance:0} m), {trees.ShadowInstancesThisFrame} shadow instances, " +
+                   $"{trees.ShadowTrianglesThisFrame / 1000}k shadow triangles{sun}.";
         }
 
         private void EndSafetyRun()
@@ -214,6 +240,24 @@ namespace MedievalZen.Endless
             EndlessFeatures f = Features;
             trees.Enabled = f.nearTrees;
             trees.Shadows = f.treeShadows;
+            MedievalZen.Environment.ForestMood.Allowed = f.forestExtras;
+            if (settings != null)
+            {
+                // Read every frame so the distances can be tuned live from the settings asset.
+                trees.FullDetailDistance = settings.treeFullDetailDistance;
+                trees.MidDetailDistance = settings.treeMidDetailDistance;
+                trees.DetailScale = settings.treeDetailScale;
+                trees.ShadowDistance = settings.treeShadowDistance;
+                trees.ShadowProxyDistance = settings.treeShadowProxyDistance;
+                trees.PlantShadowDistance = settings.plantShadowDistance;
+                trees.FernDrawDistance = settings.fernDrawDistance;
+                trees.UndergrowthDrawDistance = settings.undergrowthDrawDistance;
+                trees.CullShadowCasters = settings.treeShadowCasterCulling;
+                trees.ReuseWalk = settings.treeWalkReuse;
+                trees.ImpostorDistance = settings.treeImpostorDistance;
+                trees.ImpostorMaxPixels = settings.treeImpostorMaxPixels;
+            }
+
             Camera camera = Camera.main;
             if (camera == null)
             {
@@ -222,6 +266,7 @@ namespace MedievalZen.Endless
             }
 
             trees.Draw(camera);
+            perf.Sample((float)trees.WalkMs, (float)trees.SubmitMs, trees.WalkReused);
             if (traveller != null) trees.UpdateColliders(traveller.position);
             UpdateSafetyRun();
 
@@ -260,6 +305,32 @@ namespace MedievalZen.Endless
 
             Debug.LogError("EndlessWorld: no far-tile material and the MedievalZen/FarTerrain shader was not found; distant tiles will render pink. Run MedievalZen/Endless Road/Setup Scene.", this);
             return null;
+        }
+
+        /// <summary>
+        /// Far-prop styles of the palette: rock families from their prefabs' local bounds, houses as measured
+        /// (<see cref="FarPropStyles"/>); main thread only.
+        /// </summary>
+        private static FarPropStyles BuildFarProps(WorldPalette palette)
+        {
+            var styles = new FarPropStyles();
+            if (palette == null) return styles;
+            foreach (PrefabFamily family in palette.families)
+            {
+                if (family == null || !PropRole.IsRock(family.id)) continue;
+                List<GameObject> prefabs = WorldPalette.ValidPrefabs(family);
+                if (prefabs.Count == 0) continue;
+                var variants = new FarPropStyle[prefabs.Count];
+                for (int v = 0; v < prefabs.Count; v++)
+                {
+                    Bounds b = WorldBuilder.LocalBounds(prefabs[v]);
+                    variants[v] = FarPropStyles.RockFromBounds(family.id, b.min, b.max);
+                }
+
+                styles.Set(family.id, variants);
+            }
+
+            return styles;
         }
 
         /// <summary>Far-tree styles for every tree family of the palette (shape, measured size and colour per prefab).</summary>

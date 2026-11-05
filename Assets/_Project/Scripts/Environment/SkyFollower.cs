@@ -22,8 +22,11 @@ namespace MedievalZen.Environment
             set => target = value;
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("SkyFollower");
+
         private void LateUpdate()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (target == null)
             {
                 Camera main = Camera.main;

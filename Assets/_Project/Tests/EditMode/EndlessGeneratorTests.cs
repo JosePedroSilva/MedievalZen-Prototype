@@ -46,10 +46,13 @@ namespace MedievalZen.Tests
         // ------------------------------------------------------------------ the finite world is unchanged
 
         /// <summary>
-        /// Hashes of the default finite world before the refactor (computed 2026-10-01 from the unmodified stages). .NET (CoreCLR)
-        /// and Mono (Unity's MonoBleedingEdge) differ in the last bits of some math functions, so each runtime has its own set;
-        /// both were verified bit-identical after the refactor. Parts: heights, splat, details, trees, props, settlements,
-        /// roads, landmarks.
+        /// Hashes of the default finite world before the refactor (computed 2026-10-01 from the unmodified stages). Parts: heights,
+        /// splat, details, trees, props, settlements, roads, landmarks. CoreCLR and Mono differ (Unity's Mono evaluates float arithmetic
+        /// in double, rounding only where the JIT stores a value, and has its own libm), so each runtime has its own set.
+        /// <see cref="GoldenMono"/> was re-recorded 2026-10-06: the set of 2026-10-01 came from the standalone MonoBleedingEdge\bin\mono.exe,
+        /// a different runtime build from the one the editor embeds, and never held in the editor. The new set is the 2026-10-02 sources
+        /// (the earliest copy kept) run in the editor's own runtime (EmbedRuntime\mono-2.0-bdwgc.dll, float32 off), which reproduces
+        /// the editor's Test Runner bit for bit; today's stages give the same. See Docs/DESIGN.md, "Golden hashes under Mono".
         /// </summary>
         private static readonly Dictionary<int, ulong[]> GoldenCoreClr = new Dictionary<int, ulong[]>
         {
@@ -60,9 +63,9 @@ namespace MedievalZen.Tests
 
         private static readonly Dictionary<int, ulong[]> GoldenMono = new Dictionary<int, ulong[]>
         {
-            { 12345, new[] { 0x228F87DE719BA74AUL, 0x8A920A00337A2565UL, 0xC84D19AF12472423UL, 0x990F6FA69F3378A1UL, 0x0CB703D519ABA724UL, 0xE91C8649C0896906UL, 0x0B6B5D8540E6C2D0UL, 0x7672C97639513186UL } },
-            { 42, new[] { 0xB038326A5323B4D3UL, 0x94171F05701B1E37UL, 0xDCE0544F10723FD4UL, 0x16E4F59ABF829BC4UL, 0xD98F4AE6466C4BBEUL, 0xAC12AF1236081D19UL, 0x8908C31BD6B8DDC8UL, 0xDE59ADF2DBDE14A9UL } },
-            { 777, new[] { 0x2FC751046108E11DUL, 0x887A004AC1266F0FUL, 0x9D6BE6070A6CA383UL, 0x75E0BEF8F4B4D6BCUL, 0x32045A7029B13E0AUL, 0x7AC312EA2E9F25F3UL, 0x89F970318356A322UL, 0x8BBF023128479C4FUL } },
+            { 12345, new[] { 0xBD7F99885A2D4328UL, 0xD0728A71FAAD1E3BUL, 0xEE5116E71B70EB1EUL, 0x3FD663A1120F40AAUL, 0x479CC0A038D2C83BUL, 0x6CC1F5CF3F7F31B9UL, 0x86B0865649CBA5FEUL, 0x71AE61668A19D39BUL } },
+            { 42, new[] { 0xFD9E2AD55F457024UL, 0xE61BF5F9DA0A9250UL, 0x9B3309C5D7BCE72EUL, 0x86015C9504571902UL, 0xC1EBDC2F1D6B402CUL, 0xAC12AF1236081D19UL, 0x441F04C5E3CBF035UL, 0xDE59ADF2DBDE14A9UL } },
+            { 777, new[] { 0x535D2FFF3CEEEB7CUL, 0xD176AFC8981C675AUL, 0x5441F061B841B855UL, 0x106F9E7FD33E79F4UL, 0x704FFB6BD31CBC8DUL, 0x7AC312EA2E9F25F3UL, 0x0FBFCB91788AC171UL, 0x8BBF023128479C4FUL } },
         };
 
         [Test, Category("Slow")]
@@ -172,7 +175,7 @@ namespace MedievalZen.Tests
             TileBlueprint near = g.GenerateTile(TileAt(g, 1500.0), TileLod.Near);
             Assert.That(near.Heights.GetLength(0), Is.EqualTo(p.nearHeightResolution));
             Assert.That(near.Splat.GetLength(0), Is.EqualTo(p.nearSplatResolution));
-            Assert.That(near.Splat.GetLength(2), Is.EqualTo(TerrainShaper.LayerCount));
+            Assert.That(near.Splat.GetLength(2), Is.EqualTo(TerrainShaper.EndlessLayerCount));
             Assert.That(near.DetailResolution, Is.EqualTo(p.nearDetailResolution));
             Assert.That(near.Details.Count, Is.InRange(1, 16), "Detail layers per tile (non-empty, variants folded).");
             foreach (DetailLayer layer in near.Details) Assert.That(layer.density.Any(d => d > 0), Is.True, "Empty detail layers are not emitted.");
@@ -181,7 +184,7 @@ namespace MedievalZen.Tests
                 for (int x = 0; x < p.nearSplatResolution; x += 7)
                 {
                     float sum = 0f;
-                    for (int l = 0; l < TerrainShaper.LayerCount; l++) sum += near.Splat[z, x, l];
+                    for (int l = 0; l < TerrainShaper.EndlessLayerCount; l++) sum += near.Splat[z, x, l];
                     Assert.That(sum, Is.EqualTo(1f).Within(1e-3f));
                 }
             }
@@ -189,9 +192,17 @@ namespace MedievalZen.Tests
             foreach (float h in near.Heights) Assert.That(h, Is.InRange(0f, 1f));
             TileBlueprint far = g.GenerateTile(TileAt(g, 1500.0, 900.0), TileLod.Far);
             Assert.That(far.Heights.GetLength(0), Is.EqualTo(p.farHeightResolution));
-            Assert.That(far.Splat.GetLength(0), Is.EqualTo(p.farSplatResolution));
+            Assert.That(far.Splat.GetLength(0), Is.EqualTo(p.farSplatResolution + 1), "far paint is sampled on the grid points: one more texel per edge");
             Assert.That(far.Details, Is.Empty);
-            Assert.That(far.Props, Is.Empty);
+            foreach (PropPlacement prop in far.Props)
+            {
+                // Far tiles carry only what they draw: large rocks, the houses of places and the landmarks' structures and stones.
+                Assert.That(TileGenerator.FarRock(prop.role) || TileGenerator.FarHouse(prop.role) || TileGenerator.FarLandmark(prop.role), Is.True, prop.role);
+                if (TileGenerator.FarRock(prop.role) && g.Keys.TryGetMetrics(prop.role, prop.variant, out PropMetrics m))
+                {
+                    Assert.That(m.Height * prop.scale, Is.GreaterThanOrEqualTo(TileGenerator.FarRockMinHeight - 1e-3f));
+                }
+            }
 
             // Height() agrees with the tile heightmap at its samples.
             double ox = near.Coord.OriginX(p.tileSize), oz = near.Coord.OriginZ(p.tileSize);
@@ -215,15 +226,23 @@ namespace MedievalZen.Tests
             RoadPoint prev = g.Road(-15000.0);
             float prevGround = g.Height(prev.X, prev.Z);
             var ground = new List<float>();
+            var underDeck = new List<bool>();
+            var crossings = new List<Crossing>();
+            g.Streams.Crossings(-15100.0, 15100.0, crossings);
             for (double s = -15000.0; s <= 15000.0; s += 1.0)
             {
                 RoadPoint rp = g.Road(s);
                 float h = g.Height(rp.X, rp.Z);
                 ground.Add(h);
                 Assert.That(Mathf.Abs(rp.HeadingDeg), Is.LessThan(60f), $"Heading at s {s}.");
+                // A ford: a few centimetres of water over the road at its bottom; a bridge: the deck carries the road over the channel.
+                Crossing at = crossings.Find(c => Math.Abs(c.S - s) <= (c.Kind == CrossingKind.Ford ? StreamNetwork.FordWaterHalf + 1.0 : 10.0));
+                bool ford = at != null && at.Kind == CrossingKind.Ford, bridge = at != null && at.Kind == CrossingKind.Bridge;
+                underDeck.Add(bridge);
                 float water = g.WaterHeight(rp.X, rp.Z);
-                Assert.That(water, Is.EqualTo(-1f), $"The road is under water at s {s}.");
-                Assert.That(Mathf.Abs(h - rp.Height), Is.LessThan(0.05f), $"Ground on the centre line differs from the road height at s {s}.");
+                if (ford) Assert.That(water < 0f || water - rp.Height <= StreamPlan.FordWater + 0.02f, Is.True, $"The ford at s {s} is deeper than a few centimetres ({water - rp.Height:0.00} m).");
+                else if (!bridge) Assert.That(water, Is.EqualTo(-1f), $"The road is under water at s {s}.");
+                if (!bridge) Assert.That(Mathf.Abs(h - rp.Height), Is.LessThan(0.05f), $"Ground on the centre line differs from the road height at s {s}.");
                 if (((long)s) % 4 == 0)
                 {
                     RoadPoint a = g.Road(s - 4.0), b = g.Road(s + 4.0);
@@ -236,7 +255,11 @@ namespace MedievalZen.Tests
                 prevGround = h;
             }
 
-            for (int i = 10; i < ground.Count; i++) worstGrade = Mathf.Max(worstGrade, Mathf.Abs(ground[i] - ground[i - 10]) / 10f);
+            for (int i = 10; i < ground.Count; i++)
+            {
+                if (underDeck[i] || underDeck[i - 10]) continue;
+                worstGrade = Mathf.Max(worstGrade, Mathf.Abs(ground[i] - ground[i - 10]) / 10f);
+            }
             Assert.That(worstGrade, Is.LessThanOrEqualTo(maxGrade + 0.005f), "Steepest 10 m of the carved road.");
             Assert.That(minRadius, Is.GreaterThan(20.0), "Tightest bend radius.");
         }
@@ -380,25 +403,35 @@ namespace MedievalZen.Tests
                         PropPlacement local = prop;
                         local.position = new Vector3((float)(ax - w.X0), prop.position.y, (float)(az - w.Z0));
                         RockAudit audit = RockPlacer.Inspect(ctx, m, local);
-                        Assert.That(audit.gap, Is.LessThanOrEqualTo(0.02f), $"{prop.role} at s {s} has an air gap of {audit.gap:0.00} m.");
+                        // Rocks on a stream's drawn bank are seated on the bank, which lies a little above the ground there.
+                        StreamSample bank = StreamNetwork.Nearest(g.Terrain.RowAt(az).Streams, ax, az);
+                        bool onBank = bank.Course != null && bank.Distance <= bank.Outer;
+                        if (!onBank) Assert.That(audit.gap, Is.LessThanOrEqualTo(0.02f), $"{prop.role} at s {s} has an air gap of {audit.gap:0.00} m.");
                         if (PropRole.IsCliff(prop.role)) Assert.That(audit.convex, Is.False, $"{prop.role} at s {s} stands on convex ground.");
                         rocks++;
                         continue;
                     }
 
                     if (prop.settlementId >= 0 && prop.settlementId % 16 <= 2) continue;   // settlement dressing straddles the road on purpose (arches)
+                    if (prop.settlementId >= 0 && prop.settlementId % 16 >= 8) continue;   // a bridge carries the road, stepping stones lie in the ford beside it
                     double sNear = g.NearestS(ax, az, s);
                     RoadPoint rp = g.Road(sNear);
                     double d = Math.Sqrt((rp.X - ax) * (rp.X - ax) + (rp.Z - az) * (rp.Z - az));
-                    Assert.That(d, Is.GreaterThan(corridor - 1.0), $"{prop.role} at s {s} stands {d:0.0} m from the road centre.");
+                    // Forest pass: in the woods the corridor is the region's (logs lie from 6 m of the road centre).
+                    float propCorridor = Math.Min(corridor, Planting.TrunkCorridor(g.Regions.At(sNear).Kind, corridor));
+                    Assert.That(d, Is.GreaterThan(Math.Min(corridor - 1.0, propCorridor)), $"{prop.role} at s {s} stands {d:0.0} m from the road centre.");
                 }
 
                 foreach (TreePlacement tree in t.Trees)
                 {
                     double ax = ox + tree.position.x, az = oz + tree.position.z;
-                    RoadPoint rp = g.Road(g.NearestS(ax, az, s));
+                    double sTree = g.NearestS(ax, az, s);
+                    RoadPoint rp = g.Road(sTree);
                     double d = Math.Sqrt((rp.X - ax) * (rp.X - ax) + (rp.Z - az) * (rp.Z - az));
-                    Assert.That(d, Is.GreaterThan(corridor - 1.0), $"A tree at s {s} stands {d:0.0} m from the road centre.");
+                    // Forest pass: the trunk corridor is per region (5.5 m in a forest; the open country keeps the scatter's).
+                    float treeCorridor = Planting.TrunkCorridor(g.Regions.At(sTree).Kind, corridor);
+                    float limit = PropRole.IsTree(tree.role) ? Math.Min(corridor - 1f, treeCorridor - 0.1f) : treeCorridor < corridor ? Planting.PlantVerge - 0.5f : corridor - 1f;
+                    Assert.That(d, Is.GreaterThan(limit), $"A {tree.role} at s {s} stands {d:0.0} m from the road centre.");
                 }
             }
 
@@ -423,8 +456,8 @@ namespace MedievalZen.Tests
             }
 
             List<PropPlacement> inn = tileOwners.SelectMany(b => b.Props).Where(pp => pp.settlementId == start.Id).ToList();
-            Assert.That(inn.Any(pp => pp.role == PropRole.Cabin), Is.True, "The start inn has its cabin.");
-            Assert.That(inn.Any(pp => pp.role == PropRole.Fireplace), Is.True, "The start inn has its fireplace.");
+            Assert.That(inn.Any(pp => pp.role == PropRole.Tavern), Is.True, "The start inn has its tavern (since 2026-10-05; the cabin before).");
+            Assert.That(inn.Any(pp => pp.role == PropRole.Bench), Is.True, "The start inn has its benches.");
         }
 
         // ------------------------------------------------------------------ far from the start

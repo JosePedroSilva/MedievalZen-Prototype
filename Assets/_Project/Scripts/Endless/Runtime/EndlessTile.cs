@@ -14,10 +14,12 @@ namespace MedievalZen.Endless
         public TerrainData Data;
         public TileLod Lod;
         public bool LayersAssigned;
+        /// <summary>The layer set assigned to <see cref="Data"/> (the shared eight or the endless road's eleven).</summary>
+        public TerrainLayer[] LayerSet;
         public int Uses;
     }
 
-    /// <summary>A pooled far-tile mesh object: one MeshRenderer with its own runtime Mesh (rewritten on reuse).</summary>
+    /// <summary>A pooled far-tile mesh object: one MeshRenderer (the shared far material) and its current runtime Mesh (a fresh, non-readable one per tile).</summary>
     internal sealed class FarMeshSlot
     {
         public GameObject Go;
@@ -25,6 +27,20 @@ namespace MedievalZen.Endless
         public MeshRenderer Renderer;
         public Mesh Mesh;
         public int Triangles;
+
+        /// <summary>GPU bytes of <see cref="Mesh"/> (vertex and index buffers).</summary>
+        public long Bytes;
+    }
+
+    /// <summary>A pooled stream-ribbon mesh object: one MeshRenderer with its own runtime Mesh (rewritten on reuse), no collider.</summary>
+    internal sealed class StreamMeshSlot
+    {
+        public GameObject Go;
+        public MeshRenderer Renderer;
+        public Mesh Mesh;
+        /// <summary>The banks as a collider (the traveller walks on the drawn bank, which lies a little above the ground).</summary>
+        public MeshCollider Collider;
+        public Mesh ColliderMesh;
     }
 
     /// <summary>Where a tile is in its life.</summary>
@@ -58,6 +74,7 @@ namespace MedievalZen.Endless
         public bool FarCounted;
         public TreeCellSet Trees;
         public GameObject Water;
+        public StreamMeshSlot Streams;
         public GameObject Places;
         public readonly List<(GameObject prefab, GameObject instance)> Props = new List<(GameObject, GameObject)>();
         public readonly List<GameObject> Groups = new List<GameObject>();
@@ -68,6 +85,9 @@ namespace MedievalZen.Endless
         public int ReleaseCursor;
 
         public bool IsNear => Lod == TileLod.Near;
+
+        /// <summary>True for the distant mesh tiles (<see cref="TileLod.Far"/> and <see cref="TileLod.Mid"/>).</summary>
+        public bool IsDistant => Lod != TileLod.Near;
 
         public override string ToString() => $"{Lod} {Coord} {State}";
     }

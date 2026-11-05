@@ -140,8 +140,11 @@ namespace MedievalZen.Travel
             if (travel == null) travel = GetComponent<PlayerTravel>();
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("SignpostMenu");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (!IsOpen || source == null) return;
             Vector3 offset = source.position - transform.position;
             offset.y = 0f;

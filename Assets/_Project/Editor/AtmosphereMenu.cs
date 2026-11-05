@@ -56,9 +56,22 @@ namespace MedievalZen.EditorTools
 
         private static readonly string[] ForestFx = { "FX_Leaves_Meadows_01", "FX_Leaves_Blowing_Meadows_01" };
 
-        // Main-light shadows for a walking-speed game: 180 m, 4 cascades at 12 / 36 / 85 / 180 m.
-        private const float ShadowDistance = 180f;
-        private static readonly Vector3 Cascade4Split = new Vector3(0.067f, 0.2f, 0.47f);
+        private const string BirdMaterialPath = MaterialFolder + "/BirdSilhouette.mat";
+        private static readonly Color BirdColour = new Color(0.07f, 0.07f, 0.08f);
+
+        // Screen-space ambient occlusion on PC_Renderer, light and motion pass (2026-10-02): a radius that reaches the contact
+        // zone of trees, bushes, walls and the traveller (was 0.3 m: creases only) and a little more strength, with slightly
+        // less of it on direct sunlight. Old values are upgraded in place only while untouched.
+        private const float OldAoIntensity = 0.4f, NewAoIntensity = 0.6f;
+        private const float OldAoRadius = 0.3f, NewAoRadius = 0.6f;
+        private const float OldAoDirect = 0.25f, NewAoDirect = 0.2f;
+
+        // Main-light shadows for a walking-speed game: 300 m, 4 cascades at 15 / 45 / 110 / 300 m. Was 180 m (12 / 36 / 85):
+        // trees on the next hillside cast no shadow and looked afloat. Old values are upgraded in place only while untouched.
+        private const float OldShadowDistance = 180f;
+        private const float ShadowDistance = 300f;
+        private static readonly Vector3 OldCascade4Split = new Vector3(0.067f, 0.2f, 0.47f);
+        private static readonly Vector3 Cascade4Split = new Vector3(0.05f, 0.15f, 0.367f);
         private const float CascadeBorder = 0.12f;
         private const float ShadowDepthBias = 1f;
         private const float ShadowNormalBias = 0.75f;
@@ -74,6 +87,135 @@ namespace MedievalZen.EditorTools
 
         [MenuItem("MedievalZen/Atmosphere/Apply To Open Scene", true)]
         private static bool ValidateApply() => !EditorApplication.isPlayingOrWillChangePlaymode;
+
+        /// <summary>
+        /// Light and motion pass, applied once after scripts load (outside Play mode) so nothing needs running by hand: the
+        /// foliage wind globals get safe values for edit mode (materials that read them would otherwise get a zero direction),
+        /// the SSAO values on PC_Renderer are upgraded while they still hold the old ones, and the bird material exists.
+        /// </summary>
+        [InitializeOnLoadMethod]
+        private static void RegisterLightAndMotionUpgrade()
+        {
+            WeatherSystem.PushDefaultWindGlobals();
+            EditorApplication.delayCall += () =>
+            {
+                if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+                var log = new StringBuilder();
+                EnsureAmbientOcclusion(log, false);
+                EnsureLongShadows(log);
+                EnsureBirdMaterial(log);
+                if (log.Length == 0) return;   // already up to date
+                AssetDatabase.SaveAssets();
+                Debug.Log("Atmosphere (light and motion pass, applied once):" + log + VerifyLightAndMotion());
+            };
+        }
+
+        [MenuItem("MedievalZen/Atmosphere/Apply Light And Motion Settings", priority = 41)]
+        private static void ApplyLightAndMotionMenu()
+        {
+            var log = new StringBuilder("Atmosphere light and motion settings:");
+            EnsureAmbientOcclusion(log, true);
+            Material bird = EnsureBirdMaterial(log);
+            AmbientFxSpawner spawner = Object.FindFirstObjectByType<AmbientFxSpawner>();
+            if (spawner != null && bird != null)
+            {
+                var so = new SerializedObject(spawner);
+                so.FindProperty("birdMaterial").objectReferenceValue = bird;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                EditorSceneManager.MarkSceneDirty(spawner.gameObject.scene);
+                log.Append("\n  AmbientFx: bird material assigned (save the scene to keep it).");
+            }
+
+            AssetDatabase.SaveAssets();
+            Debug.Log(log + VerifyLightAndMotion());
+        }
+
+        /// <summary>Re-reads what was saved: the bird material from disk and the SSAO values on the renderer asset.</summary>
+        private static string VerifyLightAndMotion()
+        {
+            var sb = new StringBuilder("\n  verified after saving:");
+            var bird = AssetDatabase.LoadAssetAtPath<Material>(BirdMaterialPath);
+            sb.Append(bird != null && bird.shader != null && bird.shader.name == "Universal Render Pipeline/Unlit"
+                ? $" {BirdMaterialPath} ok;"
+                : $" WARNING {BirdMaterialPath} missing or not URP Unlit (the birds fall back to a runtime material);");
+            var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(RendererDataPath);
+            if (data != null)
+            {
+                foreach (ScriptableRendererFeature f in data.rendererFeatures)
+                {
+                    if (f == null || f.GetType().Name != "ScreenSpaceAmbientOcclusion") continue;
+                    var so = new SerializedObject(f);
+                    sb.Append($" SSAO intensity {so.FindProperty("m_Settings.Intensity")?.floatValue:0.###}, radius {so.FindProperty("m_Settings.Radius")?.floatValue:0.###}, " +
+                              $"direct {so.FindProperty("m_Settings.DirectLightingStrength")?.floatValue:0.###}, active {f.isActive}");
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        [MenuItem("MedievalZen/Atmosphere/Apply Light And Motion Settings", true)]
+        private static bool ValidateLightAndMotion() => !EditorApplication.isPlayingOrWillChangePlaymode;
+
+        /// <summary>
+        /// Sets the SSAO feature on PC_Renderer to the scenery values. <paramref name="force"/> false changes only values that
+        /// still hold the old defaults (user tweaks survive). True when something changed.
+        /// </summary>
+        internal static bool EnsureAmbientOcclusion(StringBuilder log, bool force)
+        {
+            var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(RendererDataPath);
+            if (data == null) return false;
+            ScriptableRendererFeature ssao = null;
+            foreach (ScriptableRendererFeature f in data.rendererFeatures)
+            {
+                if (f != null && f.GetType().Name == "ScreenSpaceAmbientOcclusion")
+                {
+                    ssao = f;
+                    break;
+                }
+            }
+
+            if (ssao == null)
+            {
+                if (force) log.Append($"\n  no SSAO feature on {RendererDataPath}; nothing changed.");
+                return false;
+            }
+
+            var so = new SerializedObject(ssao);
+            bool changed = false;
+            changed |= Upgrade(so.FindProperty("m_Settings.Intensity"), OldAoIntensity, NewAoIntensity, force, "SSAO intensity", log);
+            changed |= Upgrade(so.FindProperty("m_Settings.Radius"), OldAoRadius, NewAoRadius, force, "SSAO radius", log);
+            changed |= Upgrade(so.FindProperty("m_Settings.DirectLightingStrength"), OldAoDirect, NewAoDirect, force, "SSAO direct lighting strength", log);
+            if (!changed) return false;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(ssao);
+            EditorUtility.SetDirty(data);
+            return true;
+        }
+
+        private static bool Upgrade(SerializedProperty p, float oldValue, float newValue, bool force, string what, StringBuilder log)
+        {
+            if (p == null || p.propertyType != SerializedPropertyType.Float) return false;
+            if (Mathf.Approximately(p.floatValue, newValue)) return false;
+            if (!force && !Mathf.Approximately(p.floatValue, oldValue)) return false;
+            log.Append($"\n  {RendererDataPath}: {what} {p.floatValue:0.###} → {newValue:0.###}");
+            p.floatValue = newValue;
+            return true;
+        }
+
+        /// <summary>The dark URP Unlit material of the crossing birds (created once; its colour kept if edited).</summary>
+        private static Material EnsureBirdMaterial(StringBuilder log)
+        {
+            var material = AssetDatabase.LoadAssetAtPath<Material>(BirdMaterialPath);
+            if (material != null) return material;
+            Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            if (unlit == null) return null;
+            WorldPaletteMenu.EnsureFolder(MaterialFolder);
+            material = new Material(unlit) { name = "BirdSilhouette", enableInstancing = true };
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", BirdColour);
+            AssetDatabase.CreateAsset(material, BirdMaterialPath);
+            log?.Append($"\n  created {BirdMaterialPath}");
+            return material;
+        }
 
         /// <summary>Applies the whole atmosphere setup to the active scene; returns a human-readable report.</summary>
         public static string ApplyToScene(Transform player)
@@ -92,6 +234,7 @@ namespace MedievalZen.EditorTools
 
             EnsureFogFeature(fogMaterial, log);
             EnsureShadows(log);
+            EnsureAmbientOcclusion(log, false);
             VolumeProfile grading = EnsureGradingProfile(log);
 
             GameObject atmosphere = FindOrCreateRoot("Atmosphere");
@@ -291,6 +434,27 @@ namespace MedievalZen.EditorTools
                        $"border {CascadeBorder}, depth bias {ShadowDepthBias}, normal bias {ShadowNormalBias}, main light {ShadowResolution}², soft shadows on");
         }
 
+        /// <summary>
+        /// Moves the pipeline's shadow distance and cascade splits from the old values to the current ones, only while they
+        /// still hold the old ones (user tweaks survive). True when something changed.
+        /// </summary>
+        private static bool EnsureLongShadows(StringBuilder log)
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(PipelineAssetPath);
+            if (asset == null) return false;
+            var so = new SerializedObject(asset);
+            SerializedProperty distance = so.FindProperty("m_ShadowDistance");
+            if (distance == null || !Mathf.Approximately(distance.floatValue, OldShadowDistance)) return false;
+            distance.floatValue = ShadowDistance;
+            SerializedProperty split = so.FindProperty("m_Cascade4Split");
+            if (split != null && (split.vector3Value - OldCascade4Split).sqrMagnitude < 1e-6f) split.vector3Value = Cascade4Split;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(asset);
+            log.Append($"\n  {PipelineAssetPath}: shadow distance {OldShadowDistance} → {ShadowDistance} m, cascades at " +
+                       $"{Cascade4Split.x * ShadowDistance:0} / {Cascade4Split.y * ShadowDistance:0} / {Cascade4Split.z * ShadowDistance:0} m");
+            return true;
+        }
+
         private static void SetFloat(SerializedObject so, string name, float value)
         {
             SerializedProperty p = so.FindProperty(name);
@@ -471,6 +635,8 @@ namespace MedievalZen.EditorTools
             so.FindProperty("rippleFx").objectReferenceValue = Load(Meadow + "FX_Water_Movement_01.prefab", log);
             so.FindProperty("birdFx").objectReferenceValue = Load(BirdPrefabPath, log);
             so.FindProperty("fireflyMaterial").objectReferenceValue = fireflyMaterial;
+            SerializedProperty birdMaterial = so.FindProperty("birdMaterial");
+            if (birdMaterial != null) birdMaterial.objectReferenceValue = EnsureBirdMaterial(log);
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 

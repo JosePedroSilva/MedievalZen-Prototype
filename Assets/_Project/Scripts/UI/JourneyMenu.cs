@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MedievalZen.Environment;
 using MedievalZen.Player;
 using MedievalZen.Roads;
+using MedievalZen.Sound;
 using MedievalZen.Travel;
 using MedievalZen.World;
 using UnityEngine;
@@ -15,7 +16,7 @@ namespace MedievalZen.UI
 {
     /// <summary>
     /// The Journey menu (<c>Esc</c> / gamepad <c>Start</c>): a parchment side panel on the right of the screen, built in code
-    /// by the <see cref="HudController"/>, with four pages — Time, Sky, View and "Where to?" — and Resume / Reset / Quit.
+    /// by the <see cref="HudController"/>, with five pages — Time, Sky, View, "Where to?" and Sound — and Resume / Reset / Quit.
     /// <para>Input: it opens when <see cref="PlayerController.PauseToggled"/> reports the cursor was freed and then becomes
     /// <see cref="PlayerController.InputOverride"/>, so move/look/interact/map/auto-travel are swallowed while it is open and
     /// Pause closes it (the cursor locks again). Auto-travel already under way keeps walking. The panel itself is ordinary
@@ -49,7 +50,24 @@ namespace MedievalZen.UI
             WeatherOverride.LightRain,
         };
 
-        private static readonly string[] PageNames = { "Time", "Sky", "View", "Where to?" };
+        private static readonly string[] PageNames = { "Time", "Sky", "View", "Where to?", "Sound" };
+
+        /// <summary>Pages in the menu: Time, Sky, View, "Where to?" (index 3) and Sound (index 4).</summary>
+        private const int PageCount = 5;
+
+        /// <summary>The music-frequency choices in stepper order, and the hint under each.</summary>
+        private static readonly MusicFrequency[] MusicFrequencyChoices =
+        {
+            MusicFrequency.Off, MusicFrequency.Rare, MusicFrequency.Sometimes, MusicFrequency.Often,
+        };
+
+        private static readonly string[] MusicFrequencyHints =
+        {
+            "No music: only the land's own sound",
+            "Long stretches with only the land's own sound",
+            "A piece now and then, about every quarter hour",
+            "A piece every few minutes",
+        };
 
         private static readonly Color ControlNormal = new Color(0.84f, 0.76f, 0.6f, 1f);
         private static readonly Color ControlHover = new Color(0.92f, 0.85f, 0.68f, 1f);
@@ -96,14 +114,14 @@ namespace MedievalZen.UI
         private RectTransform panel;
         private CanvasGroup panelGroup;
         private Text statusText;
-        private readonly Button[] tabButtons = new Button[4];
-        private readonly Text[] tabLabels = new Text[4];
-        private readonly Image[] tabUnderlines = new Image[4];
-        private readonly RectTransform[] pages = new RectTransform[4];
-        private readonly bool[] pageAvailable = { true, true, true, true };
+        private readonly Button[] tabButtons = new Button[PageCount];
+        private readonly Text[] tabLabels = new Text[PageCount];
+        private readonly Image[] tabUnderlines = new Image[PageCount];
+        private readonly RectTransform[] pages = new RectTransform[PageCount];
+        private readonly bool[] pageAvailable = { true, true, true, true, true };
         private readonly List<List<Selectable>> pageRows = new List<List<Selectable>>
         {
-            new List<Selectable>(), new List<Selectable>(), new List<Selectable>(), new List<Selectable>(),
+            new List<Selectable>(), new List<Selectable>(), new List<Selectable>(), new List<Selectable>(), new List<Selectable>(),
         };
 
         private Button resumeButton;
@@ -122,6 +140,8 @@ namespace MedievalZen.UI
         private GameObject weatherHeader;
         private JourneyStepper weatherStepper;
         private Text weatherNow;
+        private JourneyStepper seasonStepper;
+        private Text seasonHint;
         private GameObject atmosphereHeader;
         private JourneySlider fogSlider;
         private JourneySlider hazeSlider;
@@ -129,15 +149,34 @@ namespace MedievalZen.UI
         private Text fogValue;
         private Text hazeValue;
         private Text cloudValue;
+        private JourneyStepper lightStepper;
         private GameObject soundHeader;
         private JourneyStepper windStepper;
         private JourneySlider windSlider;
         private Text windValue;
+        private JourneyStepper animalsStepper;
+        private JourneySlider animalVolumeSlider;
+        private Text animalVolumeValue;
+
+        // The Sound page.
+        private JourneySlider masterSlider;
+        private JourneySlider ambienceSlider;
+        private JourneySlider musicSlider;
+        private JourneySlider footstepSlider;
+        private Text masterValue;
+        private Text ambienceValue;
+        private Text musicValue;
+        private Text footstepValue;
+        private JourneyStepper musicFrequencyStepper;
+        private Text musicFrequencyHint;
+        private JourneyStepper musicTitlesStepper;
 
         private JourneyStepper cameraStepper;
         private JourneySlider lookSlider;
         private Text lookValue;
         private JourneyStepper invertStepper;
+        private JourneyStepper paceStepper;
+        private float paceSaveAt;   // unscaled time to save a pace stepped by the wheel (0 = nothing pending)
         private JourneyStepper hudStepper;
         private GameObject cinematicHeader;
         private JourneyStepper cinematicTravelStepper;
@@ -167,6 +206,18 @@ namespace MedievalZen.UI
         private float nextRoadRefresh;
         private MedievalZen.Endless.Waypoint shownNextInn;
         private MedievalZen.Endless.Waypoint shownPreviousInn;
+        private Text nextVillageName;
+        private Text nextVillageDetail;
+        private Text previousVillageName;
+        private Text previousVillageDetail;
+        private Button nextVillageGo;
+        private Button previousVillageGo;
+        private MedievalZen.Endless.Waypoint shownNextVillage;
+        private MedievalZen.Endless.Waypoint shownPreviousVillage;
+        private MedievalZen.Endless.Waypoint villageAhead;
+        private MedievalZen.Endless.Waypoint villageBehind;
+        private double villagesSearchedAt = double.NaN;
+        private int villagesSearchedSeed;
 
         /// <summary>True while the panel is open (it also fades out for a moment after closing).</summary>
         public bool IsOpen { get; private set; }
@@ -297,14 +348,35 @@ namespace MedievalZen.UI
             CaptureDefaults();
             ConfigureSections();
             BuildTravelList();
+            if (motor != null) paceStepper.Options = WalkPace.Labels(motor.WalkSpeed);
+            ApplySound();   // the defaults too: the listener's volume outlives a Play session in the editor
             Load();
             controller.PauseToggled += OnPauseToggled;
+            controller.PaceChanged += OnPaceStepped;
             ready = true;
         }
 
         private void OnDestroy()
         {
-            if (controller != null) controller.PauseToggled -= OnPauseToggled;
+            if (controller != null)
+            {
+                controller.PauseToggled -= OnPauseToggled;
+                controller.PaceChanged -= OnPaceStepped;
+            }
+
+            if (paceSaveAt > 0f)
+            {
+                paceSaveAt = 0f;
+                Save();   // a pace stepped just before leaving Play mode or quitting
+            }
+        }
+
+        /// <summary>The wheel or the bumpers stepped the walking pace: keep it, and save once the stepping has settled.</summary>
+        private void OnPaceStepped(float pace, float metresPerSecond)
+        {
+            if (Mathf.Approximately(settings.WalkingPace, pace)) return;
+            settings.WalkingPace = pace;
+            paceSaveAt = Time.unscaledTime + 1.5f;
         }
 
         private void OnDisable()
@@ -317,9 +389,18 @@ namespace MedievalZen.UI
             if (paused) Open();
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("JourneyMenu");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (gliding) StepGlide();
+            if (paceSaveAt > 0f && Time.unscaledTime >= paceSaveAt)
+            {
+                paceSaveAt = 0f;
+                Save();
+            }
+
             if (!IsOpen && panelAlpha <= 0f) return;   // closed: nothing to do, nothing allocated
 
             float step = Time.unscaledDeltaTime / OpenSeconds;
@@ -363,6 +444,10 @@ namespace MedievalZen.UI
                 CinematicWhenTravelling = director == null || director.CinematicWhenTravelling,
                 Letterbox = director == null || director.Letterbox,
                 HudAlways = hud != null && hud.HudAlways,
+                Animals = MedievalZen.Wildlife.WildlifePreferences.DefaultShown,
+                AnimalVolume = MedievalZen.Wildlife.WildlifePreferences.DefaultVolume,
+                RichLight = LightLook.DefaultRich,
+                WalkingPace = controller != null ? controller.Pace : WalkPace.Default,
             }.Clamp();
             settings = defaults.Clone();
         }
@@ -394,6 +479,8 @@ namespace MedievalZen.UI
         private void ApplyAll(bool atStart)
         {
             if (day != null) day.TimeScale = ScaleFor(settings.Flow);
+            if (atStart && weather != null && MedievalZen.Environment.Season.Choice != settings.Season) weather.SkipCrossFade();   // the saved season's weather at once
+            MedievalZen.Environment.Season.Choice = settings.Season;   // the season cycle and the weather read it every frame
             ApplyWeather(atStart);
             if (atmosphere != null)
             {
@@ -427,6 +514,23 @@ namespace MedievalZen.UI
                 director.CinematicWhenTravelling = settings.CinematicWhenTravelling;
                 director.Letterbox = settings.Letterbox;
             }
+
+            if (controller != null) controller.Pace = settings.WalkingPace;
+            MedievalZen.Wildlife.WildlifePreferences.AnimalsShown = settings.Animals;
+            MedievalZen.Wildlife.WildlifePreferences.SoundVolume = settings.AnimalVolume;
+            LightLook.Rich = settings.RichLight;
+            ApplySound();
+        }
+
+        /// <summary>The Sound page's values into <see cref="SoundMix"/> and the listener (the master slider is squared like the others).</summary>
+        private void ApplySound()
+        {
+            AudioListener.volume = SoundMix.SliderGain(settings.MasterVolume);
+            SoundMix.Ambience = settings.AmbienceVolume;
+            SoundMix.Music = settings.MusicVolume;
+            SoundMix.Footsteps = settings.FootstepVolume;
+            SoundMix.Frequency = settings.MusicFrequency;
+            SoundMix.ShowMusicTitles = settings.MusicTitles;
         }
 
         /// <summary>Index of the camera choice: through your eyes, over the shoulder, cinematic.</summary>
@@ -478,15 +582,27 @@ namespace MedievalZen.UI
             }
 
             weatherStepper.SetIndexWithoutNotify(System.Array.IndexOf(WeatherChoices, settings.Weather));
+            seasonStepper.SetIndexWithoutNotify((int)settings.Season);
+            UpdateSeasonHint();
             fogSlider.SetValueWithoutNotify(settings.FogAmount);
             hazeSlider.SetValueWithoutNotify(settings.HazeDistance);
             cloudSlider.SetValueWithoutNotify(settings.CloudSoftness);
+            lightStepper.SetIndexWithoutNotify(settings.RichLight ? 0 : 1);
             windStepper.SetIndexWithoutNotify(settings.WindSound ? 1 : 0);
             windSlider.SetValueWithoutNotify(settings.WindVolume / JourneySettings.WindVolumeMax);
+            animalsStepper.SetIndexWithoutNotify(settings.Animals ? 0 : 1);
+            animalVolumeSlider.SetValueWithoutNotify(settings.AnimalVolume);
+            masterSlider.SetValueWithoutNotify(settings.MasterVolume);
+            ambienceSlider.SetValueWithoutNotify(settings.AmbienceVolume);
+            musicSlider.SetValueWithoutNotify(settings.MusicVolume);
+            footstepSlider.SetValueWithoutNotify(settings.FootstepVolume);
+            musicFrequencyStepper.SetIndexWithoutNotify(Mathf.Max(0, System.Array.IndexOf(MusicFrequencyChoices, settings.MusicFrequency)));
+            musicTitlesStepper.SetIndexWithoutNotify(settings.MusicTitles ? 0 : 1);
             if (cameraRig != null) settings.Camera = cameraRig.Mode;
             cameraStepper.SetIndexWithoutNotify(CameraIndex());
             lookSlider.SetValueWithoutNotify(settings.LookSpeed);
             invertStepper.SetIndexWithoutNotify(settings.InvertY ? 1 : 0);
+            paceStepper.SetIndexWithoutNotify(WalkPace.Index(settings.WalkingPace));
             hudStepper.SetIndexWithoutNotify(HudIndex());
             cinematicTravelStepper.SetIndexWithoutNotify(settings.CinematicWhenTravelling ? 0 : 1);
             letterboxStepper.SetIndexWithoutNotify(settings.Letterbox ? 0 : 1);
@@ -505,6 +621,15 @@ namespace MedievalZen.UI
             windValue.text = Percent(settings.WindVolume / JourneySettings.WindVolumeMax);
             lookValue.text = $"×{settings.LookSpeed:0.00}";
             windSlider.interactable = settings.WindSound;
+            animalVolumeValue.text = Percent(settings.AnimalVolume);
+            animalVolumeSlider.interactable = settings.Animals;
+            masterValue.text = Percent(settings.MasterVolume);
+            ambienceValue.text = Percent(settings.AmbienceVolume);
+            musicValue.text = Percent(settings.MusicVolume);
+            footstepValue.text = Percent(settings.FootstepVolume);
+            int frequency = System.Array.IndexOf(MusicFrequencyChoices, settings.MusicFrequency);
+            musicFrequencyHint.text = frequency >= 0 ? MusicFrequencyHints[frequency] : string.Empty;
+            musicTitlesStepper.interactable = settings.MusicFrequency != MusicFrequency.Off;
         }
 
         private void UpdateDayLengthText()
@@ -627,6 +752,12 @@ namespace MedievalZen.UI
             UpdateValueTexts();
         }
 
+        private void OnRichLight(int index)
+        {
+            settings.RichLight = index == 0;
+            LightLook.Rich = settings.RichLight;
+        }
+
         private void OnWindSound(int index)
         {
             settings.WindSound = index == 1;
@@ -639,6 +770,61 @@ namespace MedievalZen.UI
             settings.WindVolume = value * JourneySettings.WindVolumeMax;
             if (wind != null) wind.Volume = settings.WindVolume;
             UpdateValueTexts();
+        }
+
+        private void OnAnimals(int index)
+        {
+            settings.Animals = index == 0;
+            MedievalZen.Wildlife.WildlifePreferences.AnimalsShown = settings.Animals;
+            UpdateValueTexts();
+        }
+
+        private void OnAnimalVolume(float value)
+        {
+            settings.AnimalVolume = value;
+            MedievalZen.Wildlife.WildlifePreferences.SoundVolume = value;
+            UpdateValueTexts();
+        }
+
+        private void OnMasterVolume(float value)
+        {
+            settings.MasterVolume = value;
+            ApplySound();
+            UpdateValueTexts();
+        }
+
+        private void OnAmbienceVolume(float value)
+        {
+            settings.AmbienceVolume = value;
+            ApplySound();
+            UpdateValueTexts();
+        }
+
+        private void OnMusicVolume(float value)
+        {
+            settings.MusicVolume = value;
+            ApplySound();
+            UpdateValueTexts();
+        }
+
+        private void OnFootstepVolume(float value)
+        {
+            settings.FootstepVolume = value;
+            ApplySound();
+            UpdateValueTexts();
+        }
+
+        private void OnMusicFrequency(int index)
+        {
+            settings.MusicFrequency = MusicFrequencyChoices[Mathf.Clamp(index, 0, MusicFrequencyChoices.Length - 1)];
+            ApplySound();
+            UpdateValueTexts();
+        }
+
+        private void OnMusicTitles(int index)
+        {
+            settings.MusicTitles = index == 0;
+            ApplySound();
         }
 
         private void OnCamera(int index)
@@ -673,6 +859,12 @@ namespace MedievalZen.UI
         {
             settings.InvertY = index == 1;
             if (cameraRig != null) cameraRig.InvertY = settings.InvertY;
+        }
+
+        private void OnPace(int index)
+        {
+            settings.WalkingPace = WalkPace.FromIndex(index);
+            if (controller != null) controller.Pace = settings.WalkingPace;
         }
 
         private void OnHud(int index)
@@ -810,6 +1002,8 @@ namespace MedievalZen.UI
             {
                 if (nextInnGo.gameObject.activeInHierarchy) rows.Add(new Selectable[] { nextInnGo });
                 if (previousInnGo.gameObject.activeInHierarchy) rows.Add(new Selectable[] { previousInnGo });
+                if (nextVillageGo.gameObject.activeInHierarchy) rows.Add(new Selectable[] { nextVillageGo });
+                if (previousVillageGo.gameObject.activeInHierarchy) rows.Add(new Selectable[] { previousVillageGo });
                 rows.Add(new Selectable[] { newJourneyButton });
             }
             else if (page == 3)
@@ -924,6 +1118,7 @@ namespace MedievalZen.UI
             fogSlider.transform.parent.gameObject.SetActive(hasAtmosphere);
             hazeSlider.transform.parent.gameObject.SetActive(hasAtmosphere);
             cloudSlider.transform.parent.gameObject.SetActive(hasAtmosphere);
+            lightStepper.transform.parent.gameObject.SetActive(hasAtmosphere);
             soundHeader.SetActive(hasWind);
             windStepper.transform.parent.gameObject.SetActive(hasWind);
             windSlider.transform.parent.gameObject.SetActive(hasWind);
@@ -937,6 +1132,7 @@ namespace MedievalZen.UI
             cinematicTravelStepper.transform.parent.gameObject.SetActive(hasCinematic);
             letterboxStepper.transform.parent.gameObject.SetActive(hasCinematic);
             pageAvailable[2] = true;   // the HUD toggle is always there
+            pageAvailable[4] = true;   // the sound levels apply in every scene
 
             RoadNetwork roads = world != null ? world.Roads : null;
             pageAvailable[3] = roads != null && roads.Segments.Count > 0 && motor != null;
@@ -1184,9 +1380,12 @@ namespace MedievalZen.UI
             roadRegionText.fontSize = 19;
             roadWalkedText = Info(roadPage, string.Empty);
 
-            Header(roadPage, "Inns");
+            Header(roadPage, "Inns and villages");
             nextInnGo = InnRow(roadPage, out nextInnName, out nextInnDetail, () => GoToInn(shownNextInn));
             previousInnGo = InnRow(roadPage, out previousInnName, out previousInnDetail, () => GoToInn(shownPreviousInn));
+            // Villages are rare (one per farmland region) and lie between inns: hopping from inn to inn passed them unseen.
+            nextVillageGo = InnRow(roadPage, out nextVillageName, out nextVillageDetail, () => GoToInn(shownNextVillage));
+            previousVillageGo = InnRow(roadPage, out previousVillageName, out previousVillageDetail, () => GoToInn(shownPreviousVillage));
 
             Header(roadPage, "A new road");
             RectTransform row = Row(roadPage, RowHeight);
@@ -1226,6 +1425,28 @@ namespace MedievalZen.UI
 
             bool layoutChanged = SetInn(endless.NextInn, ref shownNextInn, nextInnName, nextInnDetail, nextInnGo, "ahead");
             layoutChanged |= SetInn(endless.PreviousInn, ref shownPreviousInn, previousInnName, previousInnDetail, previousInnGo, "back the way you came");
+
+            // The search asks the generator about up to 12 km of road each way: only when the traveller has moved on.
+            // It runs only once those regions are cached (the world warms 16 km each way on a worker): no lazy generation here,
+            // which cost 170-330 ms per search cold in .NET, about a second in the editor. Until then the last answer stays.
+            if (villagesSearchedSeed != endless.Seed)
+            {
+                villageAhead = villageBehind = null;   // a new journey: nothing of the old road stays on the page
+                villagesSearchedAt = double.NaN;
+                villagesSearchedSeed = endless.Seed;
+            }
+
+            if ((double.IsNaN(villagesSearchedAt) || System.Math.Abs(s - villagesSearchedAt) > 50.0)
+                &&(endless.Generator == null || MedievalZen.Endless.InnFinder.Ready(endless.Generator, s, 12000.0)))
+            {
+                villagesSearchedAt = s;
+                villagesSearchedSeed = endless.Seed;
+                villageAhead = endless.Generator != null ? MedievalZen.Endless.InnFinder.FindVillage(endless.Generator, s, +1) : null;
+                villageBehind = endless.Generator != null ? MedievalZen.Endless.InnFinder.FindVillage(endless.Generator, s, -1) : null;
+            }
+
+            layoutChanged |= SetInn(villageAhead, ref shownNextVillage, nextVillageName, nextVillageDetail, nextVillageGo, "ahead");
+            layoutChanged |= SetInn(villageBehind, ref shownPreviousVillage, previousVillageName, previousVillageDetail, previousVillageGo, "back the way you came");
             if (layoutChanged && IsOpen && page == 3) RebuildNavigation();
         }
 
@@ -1237,7 +1458,8 @@ namespace MedievalZen.UI
             shown = inn;
             if (!visible) return changed;
             name.text = inn.Name;
-            detail.text = $"inn, {UiKit.FormatDistance((float)endless.RoadDistanceTo(inn))} {where} by road";
+            string kind = inn.Kind == MedievalZen.Endless.WaypointKind.City ? "city" : inn.Kind == MedievalZen.Endless.WaypointKind.Village ? "village" : inn.Kind == MedievalZen.Endless.WaypointKind.Hamlet ? "hamlet" : "inn";
+            detail.text = $"{kind}, {UiKit.FormatDistance((float)endless.RoadDistanceTo(inn))} {where} by road";
             return changed;
         }
 
@@ -1307,12 +1529,12 @@ namespace MedievalZen.UI
             // Tabs.
             RectTransform tabs = UiKit.CreateRect("Tabs", panel);
             Anchor(tabs, 0f, 1f, 1f, 1f, 20f, -146f, -20f, -102f);
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < PageCount; i++)
             {
                 int index = i;
                 Button tab = MakeButton(tabs, PageNames[i], 20);
                 tab.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.35f);
-                Anchor((RectTransform)tab.transform, i * 0.25f, 0f, (i + 1) * 0.25f, 1f, 4f, 0f, -4f, 0f);
+                Anchor((RectTransform)tab.transform, i / (float)PageCount, 0f, (i + 1) / (float)PageCount, 1f, 4f, 0f, -4f, 0f);
                 tab.onClick.AddListener(() => ShowPage(index, false));
                 tabButtons[i] = tab;
                 tabLabels[i] = tab.GetComponentInChildren<Text>();
@@ -1325,7 +1547,7 @@ namespace MedievalZen.UI
             Anchor(rule.rectTransform, 0f, 1f, 1f, 1f, 24f, -156f, -24f, -154f);
 
             // Page area.
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < PageCount; i++)
             {
                 RectTransform area = UiKit.CreateRect("Page" + PageNames[i], panel);
                 Anchor(area, 0f, 0f, 1f, 1f, 24f, 112f, -24f, -166f);
@@ -1336,6 +1558,7 @@ namespace MedievalZen.UI
             BuildSkyPage(pages[1], pageRows[1]);
             BuildViewPage(pages[2], pageRows[2]);
             BuildTravelPage(pages[3]);
+            BuildSoundPage(pages[4], pageRows[4]);
 
             // Footer.
             Image footerRule = UiKit.CreateImage("FooterRule", panel, null, Rule, Vector2.zero);
@@ -1395,7 +1618,7 @@ namespace MedievalZen.UI
                 float hour = quickHours[i];
                 Button b = MakeButton(quick, quickNames[i], 19);
                 Anchor((RectTransform)b.transform, i * 0.25f, 0.1f, (i + 1) * 0.25f, 0.9f, 4f, 0f, -4f, 0f);
-                b.onClick.AddListener(() => GlideTo(hour));
+                b.onClick.AddListener(() => GlideTo(DayClock.ClockHour(hour, MedievalZen.Environment.Season.Year)));   // dawn and dusk move with the season's day
                 quickTimeButtons[i] = b;
                 rows.Add(b);
             }
@@ -1405,6 +1628,26 @@ namespace MedievalZen.UI
             flowStepper = StepperRow(stack, "Pace", FlowLabels(), false, rows);
             flowStepper.Changed += OnFlow;
             dayLengthInfo = Info(stack, string.Empty);
+
+            // The season (2026-10-06). Asked for beside "The sky", but the Sky page is full (it does not scroll; see the note
+            // there), so it sits here, under the flow of time it depends on.
+            Header(stack, "The year");
+            seasonStepper = StepperRow(stack, "Season", new[] { "Auto", "Spring", "Summer", "Autumn" }, false, rows);
+            seasonStepper.Changed += OnSeason;
+            seasonHint = Info(stack, string.Empty);
+        }
+
+        private void OnSeason(int index)
+        {
+            settings.Season = (SeasonChoice)Mathf.Clamp(index, 0, 3);   // stepper order = enum order: Auto, Spring, Summer, Autumn
+            MedievalZen.Environment.Season.Choice = settings.Season;
+            UpdateSeasonHint();
+        }
+
+        private void UpdateSeasonHint()
+        {
+            if (seasonHint == null) return;
+            seasonHint.text = settings.Season == SeasonChoice.Auto ? "A season lasts five days of the road" : "The season stays as chosen";
         }
 
         private void BuildSkyPage(RectTransform area, List<Selectable> rows)
@@ -1425,11 +1668,42 @@ namespace MedievalZen.UI
             cloudSlider = SliderRow(stack, "Soft clouds", 0f, JourneySettings.AtmosphereMax, 0.1f, out cloudValue, rows);
             cloudSlider.onValueChanged.AddListener(OnClouds);
 
+            // One row in this section (the page does not scroll: a new header as well would overflow it at 1080p).
+            lightStepper = StepperRow(stack, "Rich light", new[] { "On", "Off" }, true, rows);
+            lightStepper.Changed += OnRichLight;
+
             soundHeader = Header(stack, "Sound").gameObject;
             windStepper = StepperRow(stack, "Wind", new[] { "Silent", "Blowing" }, true, rows);
             windStepper.Changed += OnWindSound;
             windSlider = SliderRow(stack, "Wind volume", 0f, 1f, 0.05f, out windValue, rows);
             windSlider.onValueChanged.AddListener(OnWindVolume);
+
+            Header(stack, "Animals");
+            animalsStepper = StepperRow(stack, "Animals", new[] { "Shown", "Hidden" }, true, rows);
+            animalsStepper.Changed += OnAnimals;
+            animalVolumeSlider = SliderRow(stack, "Animal sounds", 0f, 1f, 0.05f, out animalVolumeValue, rows);
+            animalVolumeSlider.onValueChanged.AddListener(OnAnimalVolume);
+        }
+
+        private void BuildSoundPage(RectTransform area, List<Selectable> rows)
+        {
+            RectTransform stack = Stack(area);
+            Header(stack, "Levels");
+            masterSlider = SliderRow(stack, "Master", 0f, 1f, 0.05f, out masterValue, rows);
+            masterSlider.onValueChanged.AddListener(OnMasterVolume);
+            ambienceSlider = SliderRow(stack, "Ambience", 0f, 1f, 0.05f, out ambienceValue, rows);
+            ambienceSlider.onValueChanged.AddListener(OnAmbienceVolume);
+            musicSlider = SliderRow(stack, "Music", 0f, 1f, 0.05f, out musicValue, rows);
+            musicSlider.onValueChanged.AddListener(OnMusicVolume);
+            footstepSlider = SliderRow(stack, "Footsteps", 0f, 1f, 0.05f, out footstepValue, rows);
+            footstepSlider.onValueChanged.AddListener(OnFootstepVolume);
+
+            Header(stack, "Music");
+            musicFrequencyStepper = StepperRow(stack, "Music frequency", new[] { "Off", "Rare", "Sometimes", "Often" }, false, rows);
+            musicFrequencyStepper.Changed += OnMusicFrequency;
+            musicFrequencyHint = Info(stack, string.Empty);
+            musicTitlesStepper = StepperRow(stack, "Song titles", new[] { "On", "Off" }, true, rows);
+            musicTitlesStepper.Changed += OnMusicTitles;
         }
 
         private void BuildViewPage(RectTransform area, List<Selectable> rows)
@@ -1442,6 +1716,8 @@ namespace MedievalZen.UI
             lookSlider.onValueChanged.AddListener(OnLookSpeed);
             invertStepper = StepperRow(stack, "Look up/down", new[] { "Normal", "Inverted" }, true, rows);
             invertStepper.Changed += OnInvert;
+            paceStepper = StepperRow(stack, "Walking pace", WalkPace.Labels(1.6f), false, rows);
+            paceStepper.Changed += OnPace;
             cinematicHeader = Header(stack, "Cinematic camera").gameObject;
             cinematicTravelStepper = StepperRow(stack, "Cinematic when travelling", new[] { "On", "Off" }, true, rows);
             cinematicTravelStepper.Changed += OnCinematicTravel;

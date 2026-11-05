@@ -19,7 +19,7 @@ namespace MedievalZen.World
         private MountainMask(Vector2 centre, float radius, float worldSize, MountainRange range)
         {
             Centre = centre;
-            Radius = Mathf.Max(0.05f, radius);
+            Radius = FastMathf.Max(0.05f, radius);
             this.worldSize = worldSize;
             Range = range;
         }
@@ -84,10 +84,10 @@ namespace MedievalZen.World
             }
 
             float s = (GridResolution - 1) / worldSize;
-            float gx = Mathf.Clamp(x * s, 0f, GridResolution - 1);
-            float gz = Mathf.Clamp(z * s, 0f, GridResolution - 1);
-            int x0 = Mathf.Min((int)gx, GridResolution - 2);
-            int z0 = Mathf.Min((int)gz, GridResolution - 2);
+            float gx = FastMathf.Clamp(x * s, 0f, GridResolution - 1);
+            float gz = FastMathf.Clamp(z * s, 0f, GridResolution - 1);
+            int x0 = FastMathf.Min((int)gx, GridResolution - 2);
+            int z0 = FastMathf.Min((int)gz, GridResolution - 2);
             float tx = gx - x0;
             float tz = gz - z0;
             int k = z0 * GridResolution + x0;
@@ -169,7 +169,7 @@ namespace MedievalZen.World
         /// </summary>
         public static Relief GenerateRelief(WorldGenParams p)
         {
-            int n = Mathf.Max(2, p.heightmapResolution);
+            int n = FastMathf.Max(2, p.heightmapResolution);
             float spacing = p.worldSize / (n - 1);
             var baseNoise = new GradientNoise(p.seed + 1);
             var warpX = new GradientNoise(p.seed + 101);
@@ -184,13 +184,13 @@ namespace MedievalZen.World
             MountainMask mask = MountainMask.Create(p);
             SkeletonGrid skeleton = SkeletonGrid.Build(mask.Range, p.worldSize, p.domainWarp * 1.5f + FineWarp + 20f);
 
-            float f = Mathf.Max(1e-5f, p.hillFrequency);
+            float f = FastMathf.Max(1e-5f, p.hillFrequency);
             float warpF = f * 0.5f;
             float ridgeF = f * 1.4f;
             float escarpF = f * 0.55f;
-            float flattenExponent = 1f + 2f * Mathf.Clamp01(p.valleyFlatten);
-            float sharpness = Mathf.Max(1f, p.ridgeSharpness);
-            float amplitudeM = Mathf.Max(1f, p.mountainAmplitude);
+            float flattenExponent = 1f + 2f * FastMathf.Clamp01(p.valleyFlatten);
+            float sharpness = FastMathf.Max(1f, p.ridgeSharpness);
+            float amplitudeM = FastMathf.Max(1f, p.mountainAmplitude);
             Vector2 saddle = mask.Range.Saddle;
             // Strata dip: the cliff bands tilt gently across the range (a seeded direction, ~2 m per 100 m).
             var dipRng = new System.Random(p.seed + 111);
@@ -231,7 +231,7 @@ namespace MedievalZen.World
                     // (a) Rolling base; the power curve flattens valley floors into plains. Four octaves (smallest
                     // wavelength ≈ 60 m on the default map): a fifth only added ~30 m micro-bumps that the terrain
                     // LOD could not follow, which left grass floating at mid distance.
-                    float rolling = Mathf.Clamp01(0.5f + 0.75f * baseNoise.Fbm(sx * f, sz * f, 4));
+                    float rolling = FastMathf.Clamp01(0.5f + 0.75f * baseNoise.Fbm(sx * f, sz * f, 4));
                     rolling = Mathf.Pow(rolling, flattenExponent);
 
                     // (b) The range: skeleton height (summits, col, spurs, knolls) plus ridged detail that is strongest
@@ -257,14 +257,14 @@ namespace MedievalZen.World
                     {
                         float kx = sx + fx, kz = sz + fz;
                         float protect = skeleton.SampleNear(kx, kz);
-                        float colDistance = Mathf.Sqrt((kx - saddle.x) * (kx - saddle.x) + (kz - saddle.y) * (kz - saddle.y));
+                        float colDistance = FastMathf.Sqrt((kx - saddle.x) * (kx - saddle.x) + (kz - saddle.y) * (kz - saddle.y));
                         float weightS = LandCover.Smooth(SculptStart, SculptFull, s) * (1f - protect) * LandCover.Smooth(ColKeepOut, ColKeepOut + 80f, colDistance);
                         if (weightS > 0.001f)
                         {
                             float gxs = (skeleton.Sample(kx + 4f, kz, out _) - skeleton.Sample(kx - 4f, kz, out _)) * (amplitudeM / 8f);
                             float gzs = (skeleton.Sample(kx, kz + 4f, out _) - skeleton.Sample(kx, kz - 4f, out _)) * (amplitudeM / 8f);
-                            float face = Mathf.Sqrt(gxs * gxs + gzs * gzs);
-                            float metres = Mathf.Max(0f, mountains) * amplitudeM;
+                            float face = FastMathf.Sqrt(gxs * gxs + gzs * gzs);
+                            float metres = FastMathf.Max(0f, mountains) * amplitudeM;
                             metres = Sculpt(metres, wx, wz, gxs, gzs, face, weightS, strataNoise, gullyNoise, dipX, dipZ);
                             mountains = metres / amplitudeM;
                         }
@@ -272,17 +272,17 @@ namespace MedievalZen.World
 
                     // (c) Escarpments: a steep step where a low-frequency noise crosses a threshold.
                     float e = escarpNoise.Sample(wx * escarpF, wz * escarpF);
-                    float step = Mathf.Clamp01((e - 0.12f) / 0.05f);
+                    float step = FastMathf.Clamp01((e - 0.12f) / 0.05f);
                     // A second noise gates the step so escarpments are broken ridges of a few hundred metres, not
                     // endless contour lines; where the gate fades the step becomes a gentle ramp.
-                    float gate = Mathf.Clamp01((escarpGate.Fbm(wx * escarpF * 1.7f, wz * escarpF * 1.7f, 2) + 0.05f) / 0.3f);
+                    float gate = FastMathf.Clamp01((escarpGate.Fbm(wx * escarpF * 1.7f, wz * escarpF * 1.7f, 2) + 0.05f) / 0.3f);
                     gate = gate * gate * (3f - 2f * gate);
                     float escarpment = step * step * (3f - 2f * step) * gate * (1f - 0.8f * m);
 
                     float low = rolling * p.rollingAmplitude + escarpment * p.escarpmentHeight;
                     lowland[z, x] = low;
                     weight[z, x] = m;
-                    map[z, x] = low + Mathf.Max(0f, mountains) * p.mountainAmplitude;
+                    map[z, x] = low + FastMathf.Max(0f, mountains) * p.mountainAmplitude;
                 }
             }
 
@@ -315,9 +315,9 @@ namespace MedievalZen.World
             }
 
             // Normalise land to [reserve, 1] so lake beds can be carved below the lowest land.
-            float amplitude = Mathf.Max(1e-3f, p.hillAmplitude);
+            float amplitude = FastMathf.Max(1e-3f, p.hillAmplitude);
             bool lakes = p.lakeCoverage > 0f;
-            float reserve = lakes ? Mathf.Min(LakeDepth / amplitude, 0.1f) : 0f;
+            float reserve = lakes ? FastMathf.Min(LakeDepth / amplitude, 0.1f) : 0f;
             float range = max - min;
             float inv = range > 1e-6f ? (1f - reserve) / range : 0f;
             for (int z = 0; z < n; z++)
@@ -331,7 +331,7 @@ namespace MedievalZen.World
             float waterHeight = -1f;
             if (lakes)
             {
-                float level = Percentile(map, Mathf.Clamp(p.lakeCoverage, 0f, 0.5f));
+                float level = Percentile(map, FastMathf.Clamp(p.lakeCoverage, 0f, 0.5f));
                 float shelf = 3f / amplitude;
                 for (int z = 0; z < n; z++)
                 {
@@ -339,8 +339,8 @@ namespace MedievalZen.World
                     {
                         float v = map[z, x];
                         if (v >= level) continue;
-                        float t = Mathf.Clamp01((level - v) / shelf);
-                        map[z, x] = Mathf.Max(0f, v - reserve * t * t * (3f - 2f * t));
+                        float t = FastMathf.Clamp01((level - v) / shelf);
+                        map[z, x] = FastMathf.Max(0f, v - reserve * t * t * (3f - 2f * t));
                     }
                 }
 
@@ -372,7 +372,7 @@ namespace MedievalZen.World
         {
             if (strength <= 0f) return;
             int n = map.GetLength(0);
-            int stride = Mathf.Max(1, Mathf.RoundToInt(DrainageCell / Mathf.Max(0.01f, spacing)));
+            int stride = FastMathf.Max(1, Mathf.RoundToInt(DrainageCell / FastMathf.Max(0.01f, spacing)));
             int m = (n - 1) / stride + 1;
             if (m < 4) return;
             float cs = spacing * stride;
@@ -418,7 +418,7 @@ namespace MedievalZen.World
                         int k = z * m + x;
                         if (closed[k]) continue;
                         closed[k] = true;
-                        filled[k] = Mathf.Max(h[k], filled[c] + Epsilon);
+                        filled[k] = FastMathf.Max(h[k], filled[c] + Epsilon);
                         heap.Push(k, filled[k]);
                     }
                 }
@@ -455,7 +455,7 @@ namespace MedievalZen.World
             }
 
             // Channel depth, limited to part of the height above the plain, only in the highland.
-            float k0 = 0.13f * Mathf.Clamp01(strength);
+            float k0 = 0.13f * FastMathf.Clamp01(strength);
             var depth = new float[count];
             for (int z = 0; z < m; z++)
             {
@@ -465,7 +465,7 @@ namespace MedievalZen.World
                     float above = h[c] - lowland[z * stride, x * stride];
                     if (above <= 0f) continue;
                     float w = LandCover.Smooth(0.05f, 0.5f, weight[z * stride, x * stride]) * (1f - keepFloor[z * stride, x * stride]);
-                    depth[c] = Mathf.Min(k0 * Mathf.Sqrt(area[c]), 0.45f * above) * w;
+                    depth[c] = FastMathf.Min(k0 * FastMathf.Sqrt(area[c]), 0.45f * above) * w;
                 }
             }
 
@@ -588,7 +588,7 @@ namespace MedievalZen.World
             public static SkeletonGrid Build(MountainRange range, float worldSize, float pad)
             {
                 float extent = worldSize + 2f * pad;
-                int res = Mathf.Max(8, Mathf.CeilToInt(extent / 8f) + 1);
+                int res = FastMathf.Max(8, Mathf.CeilToInt(extent / 8f) + 1);
                 var grid = new SkeletonGrid { values = new float[res, res], valleys = new float[res, res], near = new float[res, res], origin = -pad, cell = extent / (res - 1) };
                 for (int z = 0; z < res; z++)
                 {
@@ -678,7 +678,7 @@ namespace MedievalZen.World
                 float f0 = 1f - RiserFraction;
                 float t = f < f0 ? LedgeSlope * f : LedgeSlope * f0 + (1f - LedgeSlope * f0) * SmoothStep((f - f0) / RiserFraction);
                 // Some bands are weaker (irregular strata), set by a second octave of the noise.
-                float strength = 0.4f + 0.6f * Mathf.Clamp01(0.5f + 1.5f * strata.Sample(x * 0.012f + 31f, z * 0.012f - 17f));
+                float strength = 0.4f + 0.6f * FastMathf.Clamp01(0.5f + 1.5f * strata.Sample(x * 0.012f + 31f, z * 0.012f - 17f));
                 metres += bandWeight * strength * ((band + t) * StrataStep - (metres + offset));
             }
 
@@ -690,7 +690,7 @@ namespace MedievalZen.World
                 float across = (x * -uz + z * ux) / 30f;         // along the contour: channel spacing
                 float down = (x * ux + z * uz) / 150f;           // down the fall line: channels stay straight
                 float n = gullies.Sample(across, down);
-                float channel = 1f - Mathf.Clamp01(Mathf.Abs(n) / 0.22f);
+                float channel = 1f - FastMathf.Clamp01(FastMathf.Abs(n) / 0.22f);
                 metres -= GullyDepth * gullyWeight * channel * channel;
             }
 
@@ -699,7 +699,7 @@ namespace MedievalZen.World
 
         private static float SmoothStep(float t)
         {
-            t = Mathf.Clamp01(t);
+            t = FastMathf.Clamp01(t);
             return t * t * (3f - 2f * t);
         }
 
@@ -724,19 +724,19 @@ namespace MedievalZen.World
 
             // Blend weight from the original slope.
             var weight = new float[n, m];
-            float inv = heightScale / (2f * Mathf.Max(1e-4f, spacing));
+            float inv = heightScale / (2f * FastMathf.Max(1e-4f, spacing));
             for (int z = 0; z < n; z++)
             {
-                int z0 = Mathf.Max(0, z - 1);
-                int z1 = Mathf.Min(n - 1, z + 1);
+                int z0 = FastMathf.Max(0, z - 1);
+                int z1 = FastMathf.Min(n - 1, z + 1);
                 for (int x = 0; x < m; x++)
                 {
-                    int x0 = Mathf.Max(0, x - 1);
-                    int x1 = Mathf.Min(m - 1, x + 1);
+                    int x0 = FastMathf.Max(0, x - 1);
+                    int x1 = FastMathf.Min(m - 1, x + 1);
                     float gx = (map[z, x1] - map[z, x0]) * inv * 2f / (x1 - x0);
                     float gz = (map[z1, x] - map[z0, x]) * inv * 2f / (z1 - z0);
-                    float slope = Mathf.Sqrt(gx * gx + gz * gz);
-                    float t = Mathf.Clamp01((slope - SmoothSlopeStart) / (SmoothSlopeEnd - SmoothSlopeStart));
+                    float slope = FastMathf.Sqrt(gx * gx + gz * gz);
+                    float t = FastMathf.Clamp01((slope - SmoothSlopeStart) / (SmoothSlopeEnd - SmoothSlopeStart));
                     weight[z, x] = 1f - t * t * (3f - 2f * t);
                 }
             }
@@ -747,12 +747,12 @@ namespace MedievalZen.World
             {
                 for (int z = 0; z < n; z++)
                 {
-                    int z0 = Mathf.Max(0, z - 1);
-                    int z1 = Mathf.Min(n - 1, z + 1);
+                    int z0 = FastMathf.Max(0, z - 1);
+                    int z1 = FastMathf.Min(n - 1, z + 1);
                     for (int x = 0; x < m; x++)
                     {
-                        int x0 = Mathf.Max(0, x - 1);
-                        int x1 = Mathf.Min(m - 1, x + 1);
+                        int x0 = FastMathf.Max(0, x - 1);
+                        int x1 = FastMathf.Min(m - 1, x + 1);
                         float row0 = src[z0, x0] + 2f * src[z0, x] + src[z0, x1];
                         float row1 = src[z, x0] + 2f * src[z, x] + src[z, x1];
                         float row2 = src[z1, x0] + 2f * src[z1, x] + src[z1, x1];
@@ -784,10 +784,10 @@ namespace MedievalZen.World
             float weight = 1f;
             for (int o = 0; o < octaves; o++)
             {
-                float r = 1f - Mathf.Abs(noise.Sample(x, y) * 1.4f);
-                r = Mathf.Pow(Mathf.Clamp01(r), sharpness);
+                float r = 1f - FastMathf.Abs(noise.Sample(x, y) * 1.4f);
+                r = Mathf.Pow(FastMathf.Clamp01(r), sharpness);
                 r *= weight;
-                weight = Mathf.Clamp01(r * 1.5f);
+                weight = FastMathf.Clamp01(r * 1.5f);
                 sum += r * amplitude;
                 norm += amplitude;
                 amplitude *= 0.5f;
@@ -808,7 +808,7 @@ namespace MedievalZen.World
             {
                 for (int x = 0; x < n; x += 2)
                 {
-                    histogram[Mathf.Clamp((int)(map[z, x] * (Bins - 1)), 0, Bins - 1)]++;
+                    histogram[FastMathf.Clamp((int)(map[z, x] * (Bins - 1)), 0, Bins - 1)]++;
                     total++;
                 }
             }
@@ -828,10 +828,10 @@ namespace MedievalZen.World
         public static float SampleGrid(float[,] map, float gx, float gz)
         {
             int n = map.GetLength(0);
-            gx = Mathf.Clamp(gx, 0f, n - 1);
-            gz = Mathf.Clamp(gz, 0f, n - 1);
-            int x0 = Mathf.Min((int)gx, n - 2);
-            int z0 = Mathf.Min((int)gz, n - 2);
+            gx = FastMathf.Clamp(gx, 0f, n - 1);
+            gz = FastMathf.Clamp(gz, 0f, n - 1);
+            int x0 = FastMathf.Min((int)gx, n - 2);
+            int z0 = FastMathf.Min((int)gz, n - 2);
             float tx = gx - x0;
             float tz = gz - z0;
             float a = map[z0, x0] + (map[z0, x0 + 1] - map[z0, x0]) * tx;
@@ -865,7 +865,7 @@ namespace MedievalZen.World
             float hx = SampleNormalized(map, worldSize, x + step, z) - SampleNormalized(map, worldSize, x - step, z);
             float hz = SampleNormalized(map, worldSize, x, z + step) - SampleNormalized(map, worldSize, x, z - step);
             float inv = heightScale / (2f * step);
-            return Mathf.Sqrt(hx * hx + hz * hz) * inv;
+            return FastMathf.Sqrt(hx * hx + hz * hz) * inv;
         }
     }
 }

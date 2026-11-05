@@ -127,6 +127,8 @@ namespace MedievalZen.Environment
             Registry.Clear();
             lastBudgetFrame = -1;
             cachedPlayer = null;
+            effectsFrame = -1;
+            effectsMadeThisFrame = 0;
         }
 
         private void OnEnable()
@@ -140,8 +142,11 @@ namespace MedievalZen.Environment
             SetActive(false);
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("SettlementAmbience");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             Transform player = PlayerTransform();
             if (player == null) return;
             Vector3 d = transform.position - player.position;
@@ -151,13 +156,16 @@ namespace MedievalZen.Environment
             bool shouldBeActive = active ? distanceToPlayer < activeRadius + 20f : distanceToPlayer < activeRadius;
             if (shouldBeActive != active) SetActive(shouldBeActive);
             if (!active) return;
+            if (effectsNext < cabins.Length + fires.Length) MakeSomeEffects();
 
             float hour = DayCycle.Current != null ? DayCycle.Current.Hour : 12f;
-            requested = CountWantedLights(hour);
+            // Lamps and fires follow the light (the sky's hour: later dusk in summer); the chimney smoke follows the meals (the clock).
+            float skyHour = DayCycle.Current != null ? DayCycle.Current.SolarHour : hour;
+            requested = CountWantedLights(skyHour);
             if (lastBudgetFrame != Time.frameCount) RunBudget();
-            UpdateLights(hour);
+            UpdateLights(skyHour);
             UpdateSmoke(hour);
-            UpdateFires(hour);
+            UpdateFires(skyHour);
         }
 
         private static Transform cachedPlayer;
@@ -203,8 +211,11 @@ namespace MedievalZen.Environment
             requested = 0;
         }
 
+        private static readonly int CostBuild = Review.FrameCost.Register("SettlementAmbience.Build (smoke, fires, lights)");
+
         private void Build()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostBuild);   // stall hunt: the per-frame culprit
             built = true;
             int seed = Mathf.Abs(gameObject.name.GetHashCode());
             var rng = new System.Random(seed);
@@ -228,38 +239,79 @@ namespace MedievalZen.Environment
                 lightSeed[li] = (float)rng.NextDouble() * 100f;
             }
 
+            // The smoke and fire effects are made a few per frame (MakeSomeEffects, shared by every settlement): a village's dozen
+            // chimneys made and prewarmed in one frame was a 20-30 ms frame 250 m before each village (arrival stall hunt, 2026-10-09).
             smoke = new ParticleSystem[cabins.Length][];
             smokeRates = new float[cabins.Length][];
             for (int i = 0; i < cabins.Length; i++)
             {
-                CabinAnchor c = cabins[i];
-                if (!c.smoke || c.cabin == null || smokePrefab == null)
-                {
-                    smoke[i] = Array.Empty<ParticleSystem>();
-                    smokeRates[i] = Array.Empty<float>();
-                    continue;
-                }
-
-                GameObject go = Instantiate(smokePrefab, transform);
-                go.name = "ChimneySmoke";
-                go.transform.SetPositionAndRotation(c.cabin.TransformPoint(c.chimneyLocal), Quaternion.identity);
-                go.transform.localScale = Vector3.one * smokeScale;
-                smoke[i] = go.GetComponentsInChildren<ParticleSystem>(true);
-                smokeRates[i] = new float[smoke[i].Length];
-                for (int k = 0; k < smoke[i].Length; k++) smokeRates[i][k] = smoke[i][k].emission.rateOverTimeMultiplier;
+                smoke[i] = Array.Empty<ParticleSystem>();
+                smokeRates[i] = Array.Empty<float>();
             }
 
             fireFx = new GameObject[fires.Length];
             fireFxOn = new bool[fires.Length];
-            for (int i = 0; i < fires.Length; i++)
+            effectsNext = 0;
+        }
+
+        /// <summary>Effects (chimney smoke, campfires) made per frame by all settlements together.</summary>
+        private const int EffectsPerFrame = 2;
+
+        private static int effectsFrame = -1;
+        private static int effectsMadeThisFrame;
+        private int effectsNext = int.MaxValue;   // the next cabin (then fire) whose effect is still to make; MaxValue before Build
+        private static readonly int CostEffect = Review.FrameCost.Register("SettlementAmbience.MakeEffect (smoke, fire)");
+
+        /// <summary>Makes the next chimney smoke or campfire effects within the shared per-frame allowance.</summary>
+        private void MakeSomeEffects()
+        {
+            if (effectsFrame != Time.frameCount)
             {
-                FireAnchor f = fires[i];
-                if (f.fireplace == null || firePrefab == null) continue;
-                GameObject go = Instantiate(firePrefab, transform);
-                go.name = "Campfire";
-                go.transform.SetPositionAndRotation(f.fireplace.TransformPoint(f.local), Quaternion.identity);
-                go.SetActive(false);
-                fireFx[i] = go;
+                effectsFrame = Time.frameCount;
+                effectsMadeThisFrame = 0;
+            }
+
+            int total = cabins.Length + fires.Length;
+            while (effectsNext < total && effectsMadeThisFrame < EffectsPerFrame)
+            {
+                int i = effectsNext++;
+                if (i < cabins.Length)
+                {
+                    CabinAnchor c = cabins[i];
+                    if (!c.smoke || c.cabin == null || smokePrefab == null) continue;
+                    effectsMadeThisFrame++;
+                    using Review.FrameCost.Scope cost = Review.FrameCost.Measure(CostEffect);
+                    Review.FrameCost.FirstUse("Instantiate " + smokePrefab.name);
+                    GameObject go = Instantiate(smokePrefab, transform);
+                    go.name = "ChimneySmoke";
+                    go.transform.SetPositionAndRotation(c.cabin.TransformPoint(c.chimneyLocal), Quaternion.identity);
+                    go.transform.localScale = Vector3.one * smokeScale;
+                    ParticleSystem[] systems = go.GetComponentsInChildren<ParticleSystem>(true);
+                    var rates = new float[systems.Length];
+                    for (int k = 0; k < systems.Length; k++) rates[k] = systems[k].emission.rateOverTimeMultiplier;
+                    smoke[i] = systems;
+                    smokeRates[i] = rates;
+                    for (int k = 0; k < systems.Length; k++)
+                    {
+                        if (active) systems[k].Play(false);   // as SetActive(true) plays the smoke already made
+                        else systems[k].Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
+                    }
+                }
+                else
+                {
+                    int f = i - cabins.Length;
+                    FireAnchor anchor = fires[f];
+                    if (anchor.fireplace == null || firePrefab == null) continue;
+                    effectsMadeThisFrame++;
+                    using Review.FrameCost.Scope cost = Review.FrameCost.Measure(CostEffect);
+                    Review.FrameCost.FirstUse("Instantiate " + firePrefab.name);
+                    GameObject go = Instantiate(firePrefab, transform);
+                    go.name = "Campfire";
+                    go.transform.SetPositionAndRotation(anchor.fireplace.TransformPoint(anchor.local), Quaternion.identity);
+                    go.SetActive(false);
+                    fireFx[f] = go;
+                    fireFxOn[f] = false;
+                }
             }
         }
 

@@ -62,8 +62,11 @@ namespace MedievalZen.Environment
             if (!source.isPlaying) source.Play();
         }
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("ProceduralWindAudio");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (!playWind)
             {
                 targetGain = 0f;
@@ -71,8 +74,8 @@ namespace MedievalZen.Environment
             }
 
             float wind = WeatherSystem.Current != null ? WeatherSystem.Current.Weather.wind : 0.3f;
-            float gust = Mathf.PerlinNoise(Time.time * gustSpeed, 0.37f);
-            gust = gust * gust;
+            // The weather's gust envelope when there is one (the grass and trees swell with the same gusts you hear).
+            float gust = WeatherSystem.Current != null ? WeatherSystem.Current.Gust : FoliageWind.GustFromNoise(Mathf.PerlinNoise(Time.time * gustSpeed, 0.37f));
             float level = Mathf.Clamp01(0.25f + 0.75f * wind) * (0.45f + 0.55f * gust);
             targetGain = volume * level;
             targetCutoff = Mathf.Lerp(cutoffRange.x, cutoffRange.y, Mathf.Clamp01(wind * 0.6f + gust * 0.6f));

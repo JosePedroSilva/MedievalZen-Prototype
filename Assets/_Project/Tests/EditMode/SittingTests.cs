@@ -270,6 +270,13 @@ namespace MedievalZen.Tests
         [TestCase("SM_Gen_Env_Root_01", SeatKind.None)]
         [TestCase("SM_Bld_Stone_Cabin_01", SeatKind.None)]
         [TestCase("SM_Env_Tree_Birch_01", SeatKind.None)]
+        [TestCase("SM_Prop_Bench_Seat_01", SeatKind.Log)]
+        [TestCase("SM_Prop_Bench_Seat_03(Clone)", SeatKind.Log)]
+        [TestCase("SM_Prop_Crate_Stack_03", SeatKind.None)]
+        [TestCase("SM_Prop_Barrel_Stack_02", SeatKind.None)]
+        [TestCase("SM_Prop_Workbench_Forge_01", SeatKind.None)]
+        [TestCase("SM_Bld_Preset_Tavern_01_Optimized", SeatKind.None)]
+        [TestCase("SM_Bld_Preset_House_Archway_02_Optimized", SeatKind.None)]
         public void Catalog_RecognisesSeatProps(string name, SeatKind expected)
         {
             Assert.That(SeatCatalog.Classify(name), Is.EqualTo(expected));

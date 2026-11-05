@@ -82,6 +82,7 @@ namespace MedievalZen.EditorTools
         private static void ForgetJourneyMenu()
         {
             PlayerPrefs.DeleteKey(EndlessJourney.PrefsKey);
+            PlayerPrefs.DeleteKey(EndlessMapReach.PrefsKey);   // the scroll map's inked stretch belongs to the journey
             PlayerPrefs.Save();
             Debug.Log($"Endless road: the saved journey ({EndlessJourney.PrefsKey}) was deleted; the next Play starts at the beginning of the settings' seed.");
         }
@@ -253,6 +254,50 @@ namespace MedievalZen.EditorTools
             {
                 missing.Add($"EndlessWorld.{property} (expected {expectedPath})");
             }
+        }
+
+        /// <summary>
+        /// One-time upgrades of the settings asset (<see cref="EndlessSettingsMigration"/>). Changing a field's default is not enough: the
+        /// asset already loaded in the editor keeps the old value across script reloads, so the values are moved here once, while the asset's
+        /// <see cref="EndlessSettings.settingsVersion"/> is below <see cref="EndlessSettingsMigration.Current"/> (a value tuned by hand survives).
+        /// Version 1 (2026-10-05): tree shadows 90 → 300 m (2026-10-02, if still 90), undergrowth draw distance 250 m, shadow-caster culling and
+        /// the reuse of the tree pass on; the asset is saved so the new fields are on disk. Logged once.
+        /// </summary>
+        [InitializeOnLoadMethod]
+        private static void RegisterSettingsUpgrade()
+        {
+            EditorApplication.delayCall += () =>
+            {
+                if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+                var settings = AssetDatabase.LoadAssetAtPath<EndlessSettings>(SettingsPath);
+                if (settings == null) return;
+                var values = new EndlessSettingsMigration.Values
+                {
+                    Version = settings.settingsVersion,
+                    TreeShadowDistance = settings.treeShadowDistance,
+                    UndergrowthDrawDistance = settings.undergrowthDrawDistance,
+                    ShadowCasterCulling = settings.treeShadowCasterCulling,
+                    WalkReuse = settings.treeWalkReuse,
+                    ImpostorDistance = settings.treeImpostorDistance,
+                    ImpostorMaxPixels = settings.treeImpostorMaxPixels,
+                };
+                var changes = new List<string>();
+                int from = values.Version;
+                if (!EndlessSettingsMigration.Upgrade(ref values, changes)) return;
+                settings.settingsVersion = values.Version;
+                settings.treeShadowDistance = values.TreeShadowDistance;
+                settings.undergrowthDrawDistance = values.UndergrowthDrawDistance;
+                settings.treeShadowCasterCulling = values.ShadowCasterCulling;
+                settings.treeWalkReuse = values.WalkReuse;
+                settings.treeImpostorDistance = values.ImpostorDistance;
+                settings.treeImpostorMaxPixels = values.ImpostorMaxPixels;
+                EditorUtility.SetDirty(settings);
+                AssetDatabase.SaveAssetIfDirty(settings);
+                Debug.Log($"{SettingsPath}: settings upgraded from version {from} to {values.Version}" +
+                          $"{(changes.Count > 0 ? ": " + string.Join("; ", changes) : " (values unchanged)")}. Now: tree shadows {settings.treeShadowDistance} m, " +
+                          $"shadow proxies beyond {settings.treeShadowProxyDistance} m, plant shadows {settings.plantShadowDistance} m, ferns {settings.fernDrawDistance} m, " +
+                          $"undergrowth {settings.undergrowthDrawDistance} m, shadow-caster culling {settings.treeShadowCasterCulling}, tree pass reuse {settings.treeWalkReuse}, tree impostors beyond {settings.treeImpostorDistance} m ({settings.treeImpostorMaxPixels} px rule).", settings);
+            };
         }
 
         /// <summary>The endless-road settings asset (created with the defaults if missing).</summary>

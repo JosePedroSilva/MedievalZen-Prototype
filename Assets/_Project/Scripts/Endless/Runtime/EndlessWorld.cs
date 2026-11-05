@@ -78,6 +78,12 @@ namespace MedievalZen.Endless
         [SerializeField, Tooltip("Shadows cast by the instanced trees (inside the URP shadow distance).")]
         private bool treeShadows = true;
 
+        [SerializeField, Tooltip("Animals along the road (MedievalZen.Wildlife; the Journey menu can also hide them).")]
+        private bool animals = true;
+
+        [SerializeField, Tooltip("The forest pass's extras: ferns, undergrowth and ivy, sun shafts, dust and mist among the trunks, the haze and grade under the canopy (the safety ladder sheds them first).")]
+        private bool forestExtras = true;
+
         [Header("Start")]
         [SerializeField, Range(4f, 60f), Tooltip("Main-thread milliseconds per frame for building tiles while the screen is black (start, new journey, Go now).")]
         private float blackScreenBudgetMs = 24f;
@@ -110,6 +116,7 @@ namespace MedievalZen.Endless
         private EndlessTileBuilder builder;
         private EndlessTreeRenderer trees;
         private FarTreeStyles farStyles = FarTreeStyles.Defaults;
+        private FarPropStyles farProps = FarPropStyles.Defaults;
         private EndlessSurface surface;
         private Transform tilesRoot;
         private Transform poolRoot;
@@ -191,6 +198,9 @@ namespace MedievalZen.Endless
         /// <summary>Campfire prefab for inn ambience.</summary>
         internal GameObject FirePrefab => firePrefab;
 
+        /// <summary>The world palette the tiles are dressed from (the road traffic's carts come from its FarmCart family).</summary>
+        internal WorldPalette Palette => palette;
+
         /// <summary>True while the traveller is held (start, outrun streaming, Go now, new journey).</summary>
         public bool IsHolding => frozenByStream || frozenByScript || startup;
 
@@ -256,6 +266,7 @@ namespace MedievalZen.Endless
             transform.position = Vector3.zero;
             trees = new EndlessTreeRenderer(palette, tilesRoot, gameObject.layer);
             farStyles = BuildFarStyles(palette);
+            farProps = BuildFarProps(palette);
             builder = new EndlessTileBuilder(this, palette, poolRoot, ResolveFarMaterial(), trees);
             gameObject.AddComponent<EndlessLateDraw>().World = this;
             LogStartLine();
@@ -298,12 +309,14 @@ namespace MedievalZen.Endless
             RebuildWindowNow();
             UpdateNature(true);
             PlanNow();
+            MedievalZen.Wildlife.WildlifeManager.Ensure();
         }
 
         private void OnDisable()
         {
             SaveJourney();
             EndSafetyRun();
+            MedievalZen.Environment.ForestMood.Allowed = false;   // the forest mood belongs to the running endless world
         }
 
         private void OnApplicationQuit()
@@ -320,6 +333,7 @@ namespace MedievalZen.Endless
             // be destroyed by hand (no re-parenting while the hierarchy is being torn down).
             builder?.DestroyAll();
             trees?.Dispose();
+            perf.Dispose();
             if (farMaterial == null && farMaterialInUse != null) Destroy(farMaterialInUse);
 
             states.Clear();
@@ -342,24 +356,45 @@ namespace MedievalZen.Endless
 
         // ------------------------------------------------------------------ frame
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("EndlessWorld");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (generator == null) return;
             HandleDebugKeys();
-            TrackTraveller();
+            builder?.Seasons.Tick(trees);   // seasons pass: repaints only when Season.Revision moves
+            using (Review.FrameCost.Measure(CostTrack)) TrackTraveller();
             if (!startup && !scripted && traveller != null && FloatingOrigin.NeedsShift(traveller.position, settings.originShiftDistance))
             {
-                ShiftOrigin(origin.DeltaToward(traveller.position));
+                using (Review.FrameCost.Measure(CostShift)) ShiftOrigin(origin.DeltaToward(traveller.position));
             }
 
-            if (Time.unscaledTime >= nextPlan || MovedSincePlan()) PlanNow();
-            PollJobs();
-            LaunchJobs();
-            ApplySlices(IsBlack() ? blackScreenBudgetMs : settings.applyBudgetMs);
+            using (Review.FrameCost.Measure(CostPlan))
+            {
+                if (Time.unscaledTime >= nextPlan || MovedSincePlan()) PlanNow();
+            }
+
+            using (Review.FrameCost.Measure(CostJobs))
+            {
+                PollJobs();
+                LaunchJobs();
+            }
+
+            using (Review.FrameCost.Measure(CostApply)) ApplySlices(IsBlack() ? blackScreenBudgetMs : settings.applyBudgetMs);
             UpdateHold();
-            UpdateRoadWindow();
-            UpdateJourneyState();
+            using (Review.FrameCost.Measure(CostRoadWindow)) UpdateRoadWindow();
+            using (Review.FrameCost.Measure(CostJourney)) UpdateJourneyState();
         }
+
+        // The phases of Update (the stall hunt's per-frame culprit; the apply slices are also measured one by one).
+        private static readonly int CostTrack = Review.FrameCost.Register("EndlessWorld.TrackTraveller");
+        private static readonly int CostShift = Review.FrameCost.Register("EndlessWorld.ShiftOrigin");
+        private static readonly int CostPlan = Review.FrameCost.Register("EndlessWorld.Plan");
+        private static readonly int CostJobs = Review.FrameCost.Register("EndlessWorld.PollAndLaunchJobs");
+        private static readonly int CostApply = Review.FrameCost.Register("EndlessWorld.ApplySlices");
+        private static readonly int CostRoadWindow = Review.FrameCost.Register("EndlessWorld.RoadWindow");
+        private static readonly int CostJourney = Review.FrameCost.Register("EndlessWorld.JourneyState");
 
         private bool IsBlack()
         {
@@ -478,7 +513,7 @@ namespace MedievalZen.Endless
             EndlessFeatures features = Features;
             FarTreeStyles styles = farStyles;
             TreePrototypeIndex prototypes = trees?.Index;
-            var meshSettings = new FarMeshSettings { IncludeTrees = features.farTrees };
+            FarMeshSettings meshSettings = FarMeshSettingsFor(features);
             job.Task = Task.Run(() =>
             {
                 token.ThrowIfCancellationRequested();
@@ -486,17 +521,20 @@ namespace MedievalZen.Endless
                 TileBlueprint bp = gen.GenerateTile(coord, lod);
                 token.ThrowIfCancellationRequested();
                 var density = new TreeDensityGrid(0f, 0f, ts, 16f);
-                foreach (TreePlacement tree in bp.Trees) density.Add(tree.position.x, tree.position.z);
-                var result = new GeneratedTile { Blueprint = bp, Density = density };
-                if (lod == TileLod.Far)
+                foreach (TreePlacement tree in bp.Trees)
                 {
-                    // The whole far mesh (ground, skirt, tree impostors) as plain arrays; the main thread only uploads it.
+                    if (PropRole.IsTree(tree.role)) density.Add(tree.position.x, tree.position.z);   // bushes are not woodland
+                }
+                var result = new GeneratedTile { Blueprint = bp, Density = density };
+                if (lod != TileLod.Near)
+                {
+                    // The whole far mesh (ground, skirt, rocks, houses, tree impostors) as plain arrays; the main thread only uploads it.
                     result.FarMesh = FarTileMeshData.Build(bp, styles, meshSettings, gen.Height);
                     bp.Splat = null;   // only the heights are read again (ground queries)
                 }
                 else if (features.nearTrees && prototypes != null)
                 {
-                    result.Trees = TreeCellSet.Build(bp.Trees, ts, prototypes);
+                    result.Trees = TreeCellSet.Build(bp.Trees, ts, prototypes, TreeCellSet.DefaultCellSize, features.props ? bp.Pieces : null, features.forestExtras);
                 }
 
                 result.Milliseconds = clock.Elapsed.TotalMilliseconds;
@@ -773,6 +811,12 @@ namespace MedievalZen.Endless
 
         // ------------------------------------------------------------------ queries
 
+        /// <summary>Far-tree styles of the palette (read-only; shared with worker threads).</summary>
+        internal FarTreeStyles FarStyles => farStyles;
+
+        /// <summary>The far-mesh settings for the features in effect (the palette's rock and house styles; distant trees on or off).</summary>
+        internal FarMeshSettings FarMeshSettingsFor(EndlessFeatures features) => new FarMeshSettings { IncludeTrees = features.farTrees, Props = farProps };
+
         /// <summary>Tree density grid of the tile at <paramref name="c"/> (tile-local, trees per 100 m²), or null when not built.</summary>
         internal TreeDensityGrid DensityAt(TileCoord c) => states.TryGetValue(c, out CoordState s) && s.Active != null ? s.Active.Density : null;
 
@@ -784,7 +828,10 @@ namespace MedievalZen.Endless
             if (states.TryGetValue(c, out CoordState s) && s.Active != null && s.Active.Blueprint != null)
             {
                 TileBlueprint bp = s.Active.Blueprint;
-                return HeightmapGenerator.SampleHeight(bp.Heights, ts, bp.HeightRange, (float)(x - c.OriginX(ts)), (float)(z - c.OriginZ(ts)));
+                float lx = (float)(x - c.OriginX(ts)), lz = (float)(z - c.OriginZ(ts));
+                // A walled city's terrace deck covers the terrain's bank there: its top is the ground (people, animals, the fog's base).
+                if (bp.TerraceDecks != null && bp.TerraceDecks.TryHeight(lx, lz, out float deck)) return deck;
+                return HeightmapGenerator.SampleHeight(bp.Heights, ts, bp.HeightRange, lx, lz);
             }
 
             return generator.Height(x, z);
@@ -816,9 +863,12 @@ namespace MedievalZen.Endless
             return true;
         }
 
+        private static readonly int CostFindWaypoint = Review.FrameCost.Register("EndlessWorld.FindWaypoint (cold)");
+
         /// <summary>A waypoint by id (from the road window, built tiles, or the generator around <paramref name="near"/>).</summary>
         internal Waypoint FindWaypoint(int id, TileCoord near)
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostFindWaypoint);   // stall hunt: the per-frame culprit
             if (knownWaypoints.TryGetValue(id, out Waypoint w)) return w;
             float ts = parameters.tileSize;
             double s = generator.NearestS(near.OriginX(ts) + ts * 0.5, near.OriginZ(ts) + ts * 0.5, travellerS);
@@ -837,8 +887,35 @@ namespace MedievalZen.Endless
 
         // ------------------------------------------------------------------ diagnostics
 
+        // Review walk benchmark (read-only): the longest slice of the current frame and its label.
+        private int frameSliceFrame = -1;
+        private float frameSliceMs;
+        private string frameSliceLabel;
+
+        /// <summary>Streaming time spent in the last apply pass (this frame once the world has updated), milliseconds.</summary>
+        public float LastApplyMs => lastApplyMs;
+
+        /// <summary>The longest streaming slice of this frame, milliseconds (0 when none ran this frame).</summary>
+        public float FrameWorstSliceMs => frameSliceFrame == Time.frameCount ? frameSliceMs : 0f;
+
+        /// <summary>What that slice was (null when none ran this frame).</summary>
+        public string FrameWorstSlice => frameSliceFrame == Time.frameCount ? frameSliceLabel : null;
+
+        /// <summary>True while the traveller is held because they outran the streamer (not the start, Go now or a new journey).</summary>
+        public bool IsOutrunHold => frozenByStream;
+
+        /// <summary>The blueprint of the tile built at <paramref name="c"/> (any LOD), or null.</summary>
+        internal TileBlueprint ActiveBlueprint(TileCoord c) => states.TryGetValue(c, out CoordState s) && s.Active != null ? s.Active.Blueprint : null;
+
         private void NoteSlice(float ms, string label)
         {
+            if (frameSliceFrame != Time.frameCount || ms > frameSliceMs)
+            {
+                frameSliceFrame = Time.frameCount;
+                frameSliceMs = ms;
+                frameSliceLabel = label;
+            }
+
             int second = (int)Time.unscaledTime;
             int bucket = second % sliceBuckets.Length;
             if (sliceStamps[bucket] != second)

@@ -146,6 +146,8 @@ namespace MedievalZen.World
 
         private void Start()
         {
+            // Animals along the road (they create themselves; nothing to set up in the scene).
+            MedievalZen.Wildlife.WildlifeManager.Ensure();
             if (!generateOnStart || Roads.Segments.Count > 0) return;
             if (settings == null || palette == null)
             {

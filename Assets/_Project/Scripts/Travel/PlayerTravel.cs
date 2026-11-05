@@ -66,6 +66,8 @@ namespace MedievalZen.Travel
         /// </summary>
         public ITravelDestinationPicker DestinationPicker { get; set; }
 
+        private static readonly int CostContinue = Review.FrameCost.Register("PlayerTravel.ContinueTravel (re-route)");
+
         /// <summary>
         /// Keeps an ongoing trip going after the road network was replaced (the endless road's sliding window, or a floating-
         /// origin shift that moved everything by <paramref name="originDelta"/>): re-routes to <paramref name="destination"/>
@@ -75,6 +77,7 @@ namespace MedievalZen.Travel
         /// </summary>
         public bool ContinueTravel(Settlement destination, Vector3 originDelta)
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostContinue);   // stall hunt: the per-frame culprit
             if (destination != Destination)
             {
                 Destination = destination;
@@ -155,8 +158,11 @@ namespace MedievalZen.Travel
             traveller.Blocked -= OnBlocked;
         }
 
+        private static readonly int CostStart = Review.FrameCost.Register("PlayerTravel.StartTravel (pick + route)");
+
         private bool StartTravel()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostStart);   // stall hunt: the per-frame culprit
             if (DestinationPicker != null)
             {
                 Settlement picked = DestinationPicker.PickDestination(this, out string notice);
@@ -244,8 +250,11 @@ namespace MedievalZen.Travel
             return best;
         }
 
+        private static readonly int CostArrived = Review.FrameCost.Register("PlayerTravel.OnArrived (arrival handlers)");
+
         private void OnArrived(RoadRoute route)
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(CostArrived);   // stall hunt: the per-frame culprit
             Settlement reached = route.Destination;
             if (logEvents) Debug.Log($"You arrive at {reached.Name}.", this);
             Arrived?.Invoke(reached);

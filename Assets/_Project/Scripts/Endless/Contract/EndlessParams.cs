@@ -36,6 +36,12 @@ namespace MedievalZen.Endless
         /// <summary>Road width in metres.</summary>
         public float roadWidth = 5f;
 
+        /// <summary>
+        /// Whether village slots may hold walled cities (<see cref="Generation.JourneyPlan.IsCitySlot"/>). Always true in the game; tests
+        /// switch it off to compare the plan with the one before cities (every other place must stay where it was).
+        /// </summary>
+        public bool walledCities = true;
+
         /// <summary>Steepest grade the road may have (rise over run).</summary>
         public float maxRoadGrade = 0.08f;
 
@@ -50,5 +56,8 @@ namespace MedievalZen.Endless
 
         /// <summary>See <see cref="regionLengthMin"/>.</summary>
         public float regionLengthMax = 3500f;
+
+        /// <summary>Height samples per edge of a <see cref="TileLod.Mid"/> tile (2^n + 1; 65 = a 4 m grid on 256 m tiles).</summary>
+        public int midHeightResolution = 65;
     }
 }

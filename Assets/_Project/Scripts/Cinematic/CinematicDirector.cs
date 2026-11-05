@@ -29,6 +29,15 @@ namespace MedievalZen.Cinematic
     [DefaultExecutionOrder(-35)]
     public sealed class CinematicDirector : MonoBehaviour, ICameraPoseProvider, IOriginShiftable
     {
+        /// <summary>
+        /// Chance (0..1) that a travel shot becomes the wide vista shot, written by the music player while a piece plays (0 otherwise).
+        /// Only the first pick of a shot reads it; the vista still needs its usual weight and is never chosen twice in a row.
+        /// </summary>
+        public static float MusicWideBias;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetMusicWideBias() => MusicWideBias = 0f;
+
         [Header("When it runs")]
         [SerializeField, Tooltip("The Journey menu's camera choice \"Cinematic\": the director takes over after a few idle seconds in any situation.")]
         private bool cinematicCamera = false;
@@ -233,8 +242,11 @@ namespace MedievalZen.Cinematic
 
         // ------------------------------------------------------------------ deciding
 
+        private static readonly int FrameCostId = Review.FrameCost.Register("CinematicDirector");
+
         private void Update()
         {
+            using Review.FrameCost.Scope frameCost = Review.FrameCost.Measure(FrameCostId);   // stall hunt: the per-frame culprit
             if (!ready) return;
             float dt = Time.deltaTime;
             bool overlay = controller.InputOverride != null;
@@ -450,6 +462,10 @@ namespace MedievalZen.Cinematic
             for (int attempt = 0; attempt < 4; attempt++)
             {
                 ShotType type = scheduler.Next(context, exclude);
+                if (attempt == 0 && !restMode && MusicWideBias > 0f && type != ShotType.Vista && exclude != ShotType.Vista &&
+                    scheduler.Previous != ShotType.Vista && ShotScheduler.Weight(ShotType.Vista, context) > 0f &&
+                    scheduler.Random.NextDouble() < MusicWideBias)
+                    type = ShotType.Vista;   // a piece of music is playing: Death Stranding's pull-back to the wide view
                 ShotSolver.Plan(target, type, scheduler.Duration(type), inputs, scheduler.Random);
                 if (ShotRules.CountGood(target, inputs, scratch, 3) >= 2)
                 {
@@ -622,9 +638,9 @@ namespace MedievalZen.Cinematic
             GameWorld world = GameWorld.Current;
             Vector3 heading = inputs.Heading;
             inputs.HasSubject = false;
+            float best = 0f;
             if (world != null)
             {
-                float best = 0f;
                 float maxDistance = Streamer() != null ? 1100f : 1800f;
                 var landmarks = world.Landmarks;
                 for (int i = 0; i < landmarks.Count; i++)
@@ -642,7 +658,8 @@ namespace MedievalZen.Cinematic
                     if (score <= best) continue;
                     best = score;
                     inputs.HasSubject = true;
-                    inputs.Subject = l.position + Vector3.up * (l.kind == LandmarkKind.Lake ? 1f : 4f);
+                    // A structure (tower, chapel, windmill) is framed at about half its height, so the shot holds all of it.
+                    inputs.Subject = l.position + Vector3.up * (l.kind == LandmarkKind.Lake ? 1f : l.kind == LandmarkKind.Structure ? 7f : 4f);
                 }
 
                 RoadNetwork roads = world.Roads;
@@ -659,9 +676,19 @@ namespace MedievalZen.Cinematic
                 }
             }
 
+            // Animals: an event (or a large herd) close by can be the subject too; landmark scoring above is unchanged and an
+            // event outweighs any landmark, a herd only wins when no landmark is in view. Seated rest shots look any way.
+            MedievalZen.Wildlife.PointsOfInterest animals = MedievalZen.Wildlife.PointsOfInterest.Current;
+            if (animals != null && animals.TryBest(p, heading, restMode, out Vector3 animalSubject, out float animalScore) && animalScore > best)
+            {
+                best = animalScore;
+                inputs.HasSubject = true;
+                inputs.Subject = animalSubject;
+            }
+
             context.Scenery = ShotContext.Classify(density, nearPass, hi - lo, water, nearSettlement);
             DayCycle day = DayCycle.Current;
-            context.Hour = day != null ? day.Hour : 12f;
+            context.Hour = day != null ? day.SolarHour : 12f;   // golden hour and night follow the light (= Hour in spring and autumn)
             context.Overcast = Overcast();
             context.Seated = restMode;
             context.NearFire = seat != null && seat.IsActive && seat.Plan.HasFire;

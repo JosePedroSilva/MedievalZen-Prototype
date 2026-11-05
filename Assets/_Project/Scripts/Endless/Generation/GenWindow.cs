@@ -34,6 +34,10 @@ namespace MedievalZen.Endless.Generation
         public LandCover Cover;
         /// <summary>Lake level in the window or -1.</summary>
         public float WaterLevel = -1f;
+        /// <summary>Talus of the pass walls at the height samples (scree fans, aprons), [z, x]; 0 elsewhere.</summary>
+        public float[,] Talus;
+        /// <summary>Gully weight of the pass walls at the height samples, [z, x]; 0 elsewhere.</summary>
+        public float[,] Gully;
 
         /// <summary>Local float of an absolute x.</summary>
         public float LocalX(double x) => (float)(x - X0);
@@ -51,12 +55,19 @@ namespace MedievalZen.Endless.Generation
             var w = new GenWindow { X0 = x0, Z0 = z0, Spacing = spacing, Size = cells * spacing, WaterLevel = waterLevel };
             int n = cells + 1;
             w.Map = new float[n, n];
+            w.Talus = new float[n, n];
+            w.Gully = new float[n, n];
             float inv = 1f / p.heightRange;
             for (int j = 0; j < n; j++)
             {
                 double z = z0 + j * (double)spacing;
                 TerrainField.Row row = field.RowAt(z);
-                for (int i = 0; i < n; i++) w.Map[j, i] = field.Height(row, x0 + i * (double)spacing) * inv;
+                for (int i = 0; i < n; i++)
+                {
+                    w.Map[j, i] = field.Height(row, x0 + i * (double)spacing, out float talus, out float gully) * inv;
+                    w.Talus[j, i] = talus;
+                    w.Gully[j, i] = gully;
+                }
             }
 
             w.Params = new WorldGenParams
@@ -108,6 +119,7 @@ namespace MedievalZen.Endless.Generation
         public void BuildCover(EndlessParams p, TerrainField field, int resolution)
         {
             LandCover cover = LandCover.Create(resolution, Size, WaterLevel);
+            cover.EnableMountain();
             float texel = cover.TexelSize;
             WorldGenParams wp = Params;
             for (int j = 0; j < resolution; j++)
@@ -122,7 +134,14 @@ namespace MedievalZen.Endless.Generation
                     float slope = HeightmapGenerator.SampleSlope(Map, wp.worldSize, wp.hillAmplitude, lx, lz);
                     cover.Height[k] = h;
                     cover.Slope[k] = slope;
-                    field.Cover(row, X0 + (i + 0.5) * texel, h, slope, out float forest, out float highland, out float moist, out float farm);
+                    field.Cover(row, X0 + (i + 0.5) * texel, h, slope, out float forest, out float highland, out float moist, out float farm, out float mountain);
+                    cover.Mountain[k] = mountain;
+                    if (mountain > 0f)
+                    {
+                        cover.Talus[k] = SampleGrid(Talus, lx, lz);
+                        cover.Gully[k] = SampleGrid(Gully, lx, lz);
+                    }
+
                     cover.Forest[k] = forest;
                     cover.Highland[k] = highland;
                     cover.Moisture[k] = moist;
@@ -133,6 +152,20 @@ namespace MedievalZen.Endless.Generation
 
             cover.ComputeScree(p.heightRange);
             Cover = cover;
+            // In the pass ranges the scatter places their own grey rocks instead of the Meadow ones (one rock look per range).
+            Params.window.RockFamily = (family, x, z) => TileGenerator.PassRockFamily(family, cover.Mountain[cover.Index(x, z)]);
+        }
+
+        /// <summary>A grid laid out like <see cref="Map"/> (samples every <see cref="Spacing"/> from local 0), bilinear at local (x, z).</summary>
+        public float SampleGrid(float[,] grid, float x, float z)
+        {
+            int n = grid.GetLength(0);
+            float gx = Mathf.Clamp(x / Spacing, 0f, n - 1.001f), gz = Mathf.Clamp(z / Spacing, 0f, n - 1.001f);
+            int i = (int)gx, j = (int)gz;
+            float tx = gx - i, tz = gz - j;
+            float a = grid[j, i] + (grid[j, i + 1] - grid[j, i]) * tx;
+            float b = grid[j + 1, i] + (grid[j + 1, i + 1] - grid[j + 1, i]) * tx;
+            return a + (b - a) * tz;
         }
     }
 }

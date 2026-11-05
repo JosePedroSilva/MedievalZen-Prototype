@@ -9,7 +9,7 @@ $failed = $false
 
 foreach ($project in $projects) {
     $path = Join-Path $PSScriptRoot $project
-    $output = & dotnet build $path -nologo -v q -clp:NoSummary 2>&1 | ForEach-Object { "$_" }
+    $output = & dotnet build $path -nologo -v q -clp:NoSummary -p:UseSharedCompilation=false 2>&1 | ForEach-Object { "$_" }
     $exitCode = $LASTEXITCODE
     $issues = $output | Where-Object { $_ -match ': (error|warning) ' } | Sort-Object -Unique
     if ($exitCode -ne 0) { $failed = $true }

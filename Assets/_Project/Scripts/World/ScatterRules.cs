@@ -120,5 +120,48 @@ namespace MedievalZen.World
                 new ScatterRule(PropRole.Lilies, B(0f, 0f, 0f, 0f), 50f, 1.2f) { onWater = true, maxDepth = 1.6f, clump = 0.5f },
             };
         }
+
+        /// <summary>
+        /// The endless road's table (the finite world keeps <see cref="Default"/>): the same rules in the same order, plus trees
+        /// along the streams and lake shores, more and more strongly grouped meadow trees, and an understorey in open country
+        /// (bushes, shrubs and ferns, small stones). The structured planting (roadside lines, hedgerows, copses, crest trees, wood
+        /// edges) is added by the endless generator on top of it.
+        /// </summary>
+        public static List<ScatterRule> Endless(float treeLine)
+        {
+            List<ScatterRule> rules = Default(treeLine);
+            float broadleaf = Mathf.Clamp(treeLine, 0.2f, 1.5f);
+            foreach (ScatterRule rule in rules)
+            {
+                switch (rule.family)
+                {
+                    case PropRole.MeadowTree:
+                        rule.biomes = B(1f, 0f, 0.4f, 0.25f, 0.5f);
+                        rule.density = 8f;
+                        rule.clump = 0.75f;
+                        break;
+                    case PropRole.Bush:
+                        rule.biomes = B(0.45f, 0.6f, 0.15f, 0.08f, 0.6f);
+                        rule.density = 20f;
+                        rule.clump = 0.55f;
+                        break;
+                    case PropRole.Shrub:
+                        rule.biomes = B(0.25f, 0.8f, 0.15f, 0f, 0.5f);
+                        rule.density = 12f;
+                        break;
+                    case PropRole.RockSmallPile:
+                        rule.density = 3f;
+                        break;
+                    case PropRole.LowlandRock:
+                        rule.density = 1.4f;
+                        break;
+                }
+            }
+
+            // Trees along the water: alder-like broadleaves on stream banks and lake margins (the shore biome), after the woods.
+            int at = rules.FindIndex(r => r.family == PropRole.DeadTree);
+            rules.Insert(at, new ScatterRule(PropRole.ForestTree, B(0f, 0f, 0f, 0f, 1f), 70f, 3f) { maxSlope = 0.6f, clump = 0.35f, scaleMin = 0.85f, scaleMax = 1.25f, maxHeight = broadleaf, heightFade = 0.1f });
+            return rules;
+        }
     }
 }

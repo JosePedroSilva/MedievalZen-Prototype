@@ -79,6 +79,40 @@ namespace MedievalZen.Tests
         }
 
         [Test]
+        public void TheMidRingSitsBetweenNearAndFarWithItsOwnHysteresis()
+        {
+            StreamingRanges r = Ranges();
+            r.Mid = 1000f;
+            Assert.That(TileStreaming.Desired(null, 600f, r), Is.EqualTo(TileLod.Mid));
+            Assert.That(TileStreaming.Desired(null, 1100f, r), Is.EqualTo(TileLod.Far));
+            Assert.That(TileStreaming.Desired(TileLod.Far, 990f, r), Is.EqualTo(TileLod.Mid), "a far tile upgrades inside the mid distance");
+            Assert.That(TileStreaming.Desired(TileLod.Mid, 1100f, r), Is.EqualTo(TileLod.Mid), "a mid tile stays mid inside the margin");
+            Assert.That(TileStreaming.Desired(TileLod.Mid, r.Mid + r.Margin + 1f, r), Is.EqualTo(TileLod.Far));
+            Assert.That(TileStreaming.Desired(TileLod.Near, r.Near + r.Margin + 1f, r), Is.EqualTo(TileLod.Mid), "a near tile left behind becomes mid");
+            Assert.That(TileStreaming.Desired(TileLod.Mid, r.Near - 1f, r), Is.EqualTo(TileLod.Near));
+
+            // Planning: near, then mid, then far; every tile at the level its distance asks for.
+            var wants = new List<TileWant>();
+            TileStreaming.Plan(128.0, 128.0, 0f, 1f, r, null, wants);
+            int stage = 0;
+            foreach (TileWant w in wants)
+            {
+                int s = w.Lod == TileLod.Near ? 0 : w.Lod == TileLod.Mid ? 1 : 2;
+                Assert.That(s, Is.GreaterThanOrEqualTo(stage), "near before mid before far");
+                stage = s;
+                float d = TileStreaming.DistanceToTile(128.0, 128.0, w.Coord, r.TileSize);
+                Assert.That(w.Lod, Is.EqualTo(d <= r.Near ? TileLod.Near : d <= r.Mid ? TileLod.Mid : TileLod.Far), $"{w.Coord} at {d:0} m");
+            }
+
+            Assert.That(wants.Exists(w => w.Lod == TileLod.Mid), Is.True);
+
+            // Mid at (or below) the near distance: no mid ring at all.
+            r.Mid = r.Near;
+            Assert.That(TileStreaming.Desired(null, 600f, r), Is.EqualTo(TileLod.Far));
+            Assert.That(TileStreaming.Desired(TileLod.Mid, 600f, r), Is.EqualTo(TileLod.Far));
+        }
+
+        [Test]
         public void StandingOnABoundaryDoesNotThrash()
         {
             StreamingRanges r = Ranges();
@@ -431,6 +465,19 @@ namespace MedievalZen.Tests
             Assert.That(InnFinder.Select(inns, 1380.0, +1).Id, Is.EqualTo(5), "within the skip distance the inn counts as reached");
             Assert.That(InnFinder.Select(inns, 3000.0, +1), Is.Null);
 
+            // Villages and hamlets lie between inns (hopping from inn to inn passes them): found by their own search.
+            var places = new List<Waypoint>(inns)
+            {
+                new Waypoint { Id = 6, Kind = WaypointKind.Village, S = 700.0 },
+                new Waypoint { Id = 7, Kind = WaypointKind.Hamlet, S = -900.0 },
+                new Waypoint { Id = 8, Kind = WaypointKind.Landmark, S = 300.0 },
+            };
+            Assert.That(InnFinder.SelectVillage(places, 10.0, +1).Id, Is.EqualTo(6));
+            Assert.That(InnFinder.SelectVillage(places, 10.0, -1).Id, Is.EqualTo(7), "a hamlet counts");
+            Assert.That(InnFinder.SelectVillage(places, 690.0, +1), Is.Null, "within the skip distance the village counts as reached");
+            Assert.That(InnFinder.SelectVillage(inns, 10.0, +1), Is.Null, "inns are not villages");
+            Assert.That(InnFinder.Select(places, 10.0, +1).Id, Is.EqualTo(4), "and the inn search still skips villages");
+
             Assert.That(InnFinder.DirectionFor(Vector3.forward, 0f), Is.EqualTo(1));
             Assert.That(InnFinder.DirectionFor(Vector3.back, 0f), Is.EqualTo(-1));
             Assert.That(InnFinder.DirectionFor(Vector3.right, 30f), Is.EqualTo(1));
@@ -485,7 +532,7 @@ namespace MedievalZen.Tests
             Assert.That(EndlessJourney.TryFromJson("{\"seed\":5,\"s\":12.5}", out EndlessJourney old), Is.True, "no version = oldest, read field by field");
             Assert.That(old.Seed, Is.EqualTo(5));
             Assert.That(old.S, Is.EqualTo(12.5));
-            Assert.That(EndlessJourney.TryFromJson("{\"version\":2,\"seed\":5}", out EndlessJourney newer), Is.False, "a newer format is not half-read");
+            Assert.That(EndlessJourney.TryFromJson("{\"version\":" + (EndlessJourney.CurrentVersion + 1) + ",\"seed\":5}", out EndlessJourney newer), Is.False, "a newer format is not half-read");
             Assert.That(newer, Is.Null);
             Assert.That(EndlessJourney.TryFromJson("{\"version\":1,\"s\":12.5}", out _), Is.False, "no seed, no journey");
             Assert.That(EndlessJourney.TryFromJson("{\"version\":1,\"seed\":5.5}", out _), Is.False);

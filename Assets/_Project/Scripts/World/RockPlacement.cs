@@ -123,6 +123,8 @@ namespace MedievalZen.World
                 case PropRole.GenericCliff:
                 case PropRole.DirtCliff: return new RockSpec(RockShape.Cliff, 3f, 8f, 0f, 0f) { minScale = 0.3f, maxScale = 1f };
                 case PropRole.GroundCliff: return new RockSpec(RockShape.Mound, 3f, 6f, 0f, 0f) { minScale = 0.5f, maxScale = 1f };
+                case PropRole.PassCliff: return new RockSpec(RockShape.Cliff, 5f, 9.5f, 0f, 0f) { minScale = 0.25f, maxScale = 1f };
+                case PropRole.PassBoulder: return new RockSpec(RockShape.Boulder, 0.8f, 3f, 0.5f, 18f) { minScale = 0.35f, maxScale = 1.3f };
                 case PropRole.Mound: return new RockSpec(RockShape.Mound, 1.5f, 3.2f, 0.6f, 6f) { minScale = 0.6f, maxScale = 1.1f };
                 case PropRole.StoneStack:
                 case PropRole.StonePile: return new RockSpec(RockShape.Cairn, 1.2f, 3f, 0.2f, 5f) { minScale = 0.35f, maxScale = 1.3f };
