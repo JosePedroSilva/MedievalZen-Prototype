@@ -44,3 +44,19 @@ Thumbs.db
 bin/
 # ...but keep the compile-check projects (*.csproj is ignored above for Unity-generated ones)
 !Tools/CompileCheck/*.csproj
+!Tools/MonoCheck/clr/*.csproj
+# MonoRunner.exe is rebuilt from MonoRunner.cs by Tools/MonoCheck/run.ps1
+Tools/MonoCheck/MonoRunner.exe
+
+# Review captures (MedievalZen/Review/Capture Tour, F9)
+ReviewShots/
+
+# Third-party packs: licensed, not redistributable, and about 8.5 GB together, far past
+# GitHub's limits. Every clone imports them locally; Tools/AssetCheck/check-assets.ps1
+# (Windows) or check-assets.sh (macOS) lists the ones still missing. See README.md.
+/Assets/Synty/
+/Assets/Synty.meta
+/Assets/polyperfect/
+/Assets/polyperfect.meta
+/Assets/Sounds/
+/Assets/Sounds.meta

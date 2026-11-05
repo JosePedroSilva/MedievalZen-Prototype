@@ -1,0 +1,36 @@
+# Third-party packs MedievalZen needs. Read by Tools/AssetCheck/check-assets.ps1 and check-assets.sh.
+#
+# One pack per line, six fields separated by "|":
+#   name | folder under the project root | minimum file count (without .meta) | required or optional | sentinel files, ";"-separated, relative to the folder | where to get it
+#
+# A pack counts as present when its folder exists, holds at least the minimum number of files and every
+# sentinel file is there. The sentinels are files the first-party assets reference (by GUID or by path), so a
+# pack that passes is the one the project was built against. The minimums are 85 % of the file count on the
+# machine that wrote this file (2026-11-05); a reimport may differ a little, which is why they are not exact.
+#
+# Import each pack with its own .meta files (the .unitypackage from the store, or a copy of the folder from
+# another checkout): first-party prefabs, scenes and palettes point at these assets by GUID. Keep every
+# folder exactly where this list says; the sound packs keep the nested folder of the same name they ship with.
+# Add a line here whenever a new pack is imported.
+
+# --- Synty Studios (syntystore.com or the Unity Asset Store), URP versions, imported into Assets/Synty/ ---
+POLYGON Fantasy Kingdom | Assets/Synty/PolygonFantasyKingdom | 5655 | required | Models/FantasyKingdom_Characters.fbx;Materials/Alts/PolygonFantasyKingdom_Mat_01_A.mat;Prefabs/Vehicles/SM_Veh_Wheelbarrow_01.prefab | Synty Studios: POLYGON Fantasy Kingdom (the medieval town pack; buildings, props, characters)
+POLYGON Generic | Assets/Synty/PolygonGeneric | 1077 | required | Prefabs/Props/SM_Gen_Prop_Table_01.prefab;Materials/Generic_Dirt.mat;Prefabs/Characters/SM_Gen_Chr_Peasent_Male_01.prefab | Synty Studios: the POLYGON Generic kit (folder PolygonGeneric: modular pieces, peasant characters, roads, props)
+POLYGON Nature Biomes - Meadow Forest | Assets/Synty/PolygonNatureBiomes/PNB_Meadow_Forest | 609 | required | Materials/Plants/Grass_Tall_Mat_01.mat;Terrain/Grass_Texture_01.png;Terrain/Terrain_Meadow_Grass_01.terrainlayer;Prefabs/Props/SM_Bld_Stone_Cabin_01.prefab | Synty Studios: POLYGON Nature Biomes - Meadow Forest (the main biome: vegetation, rocks, terrain layers)
+POLYGON Nature Biomes - Arid Desert | Assets/Synty/PolygonNatureBiomes/PNB_Arid_Desert | 451 | required | FX/FX_Prefabs/FX_Vulture_01.prefab | Synty Studios: POLYGON Nature Biomes - Arid Desert (only its vulture FX is used today; a future dry biome)
+PNB_Core (Nature Biomes shared kit) | Assets/Synty/PNB_Core | 85 | required | Shaders/Foliage.shadergraph;Prefabs/WeatherControl.prefab;Prefabs/SM_Env_Skydome_01.prefab;Prefabs/FX_Rain_Splash_01.prefab | Synty Studios: installed by any POLYGON Nature Biomes pack (skydome, cloud and fog rings, weather, foliage shader)
+ANIMATION - Base Locomotion | Assets/Synty/AnimationBaseLocomotion | 839 | required | Animations/Polygon/Masculine/Locomotion/Walk/A_Walk_F_Masc.fbx;Animations/Polygon/Masculine/Idle/A_Idle_Standing_Masc.fbx;Animations/Polygon/Neutral/Additive/Look/A_HeadLook_Additive_Neut.fbx | Synty Studios: ANIMATION - Base Locomotion (humanoid clips for the POLYGON rig)
+Synty Package Helper | Assets/Synty/SyntyPackageHelper | 2 | optional | Editor | Synty Studios: editor helper bundled with Synty packages; nothing in the project needs it
+
+# --- polyperfect (Unity Asset Store), imported into Assets/polyperfect/ ---
+polyperfect - Low Poly Animated Animals | Assets/polyperfect/Low Poly Animated Animals | 847 | required | Sounds/SFX_Horse_Whinny.ogg;Animator Controllers/CTL_Horse.controller;Meshes/Animals/Horse/SKM_Horse_Rig.fbx | Unity Asset Store: Low Poly Animated Animals by polyperfect (URP version; the horses, animals and their sounds)
+polyperfect - Common | Assets/polyperfect/Common | 17 | required | Polyperfect.Common.asmdef;Wander Script | Installed together with Low Poly Animated Animals (its shared scripts and assembly definition)
+
+# --- Sound packs, unpacked into Assets/Sounds/<pack name>/ exactly as delivered (each keeps its nested folder of the same name) ---
+Animals Sound FX Pack | Assets/Sounds/Animals Sound FX Pack | 322 | required | Non Loops/Birds Single/Pigeon.wav;Non Loops/Birds Single/Seagull Call A.wav | Unity Asset Store: Animals Sound FX Pack (spot birds of the ambience)
+Environmental Ambiences Sound FX Pack Vol. 4 | Assets/Sounds/Environmental Ambiences Sound FX Pack Vol. 4 | 163 | required | Environmental Ambiences Sound FX Pack Vol. 4/Nature/Windy Place 001.wav;Environmental Ambiences Sound FX Pack Vol. 4/Nature/Grass Rustling.wav | Unity Asset Store: Environmental Ambiences Sound FX Pack Vol. 4 (wind and grass beds)
+Environmental Ambiences Sound FX Pack Vol. 5 | Assets/Sounds/Environmental Ambiences Sound FX Pack Vol. 5 | 165 | required | Environmental Ambiences Sound FX Pack Vol. 5/Seasons/Summer.wav;Environmental Ambiences Sound FX Pack Vol. 5/Biome/Woods Night.wav | Unity Asset Store: Environmental Ambiences Sound FX Pack Vol. 5 (season, woods and village beds)
+Environments 2 | Assets/Sounds/Environments 2 | 170 | required | Environments 2/Farm/Farm Windmill Loop.wav;Environments 2/Forest Water/Forest Secluded River Loop.wav | Unity Asset Store: Environments 2 (farm and water loops)
+Ethereal Music Pack | Assets/Sounds/Ethereal Music Pack | 97 | required | Ethereal Music Pack/Wind Chime (RT 5.647)/Ethereal Wind Chime Main.wav | Unity Asset Store: Ethereal Music Pack (music; the folder names carry each track's reverb tail, RT, which the music library reads)
+Ethereal Music Pack Vol. 3 | Assets/Sounds/Ethereal Music Pack Vol. 3 | 97 | required | Ethereal Music Pack Vol. 3/Winds of Time (RT 8.092)/Ethereal Vol3 Winds of Time Main.wav | Unity Asset Store: Ethereal Music Pack Vol. 3 (music)
+Ethereal Music Pack Vol. 4 | Assets/Sounds/Ethereal Music Pack Vol. 4 | 97 | required | Ethereal Music Pack Vol. 4/The Tropics (RT 4.8)/Ethereal Vol4 The Tropics Main.wav | Unity Asset Store: Ethereal Music Pack Vol. 4 (music)
